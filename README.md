@@ -35,8 +35,7 @@ python app_v3.py
 ## 📦 Generar .exe
 
 ```bash
-pip install pyinstaller
-pyinstaller --noconfirm --onefile --windowed --name "SistemaEmpanadas" app_v3.py
+py -m PyInstaller SistemaLaExtra.spec
 ```
 El ejecutable queda en `dist/`.
 

@@ -3631,6 +3631,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   initHoldButton();
+
+  // Initialize theme toggle button
+  const themeToggle = $('#theme-toggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      if (newTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+      }
+    });
+  }
 });
 
 setInterval(() => { if (currentSection === 'pedidos') loadPedidos(); }, 30000);

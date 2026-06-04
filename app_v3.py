@@ -19,7 +19,38 @@ if getattr(sys, "frozen", False):
 else:
     app = Flask(__name__)
 
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.register_blueprint(api)
+
+whatsapp_process = None
+last_heartbeat = time.time()
+has_received_heartbeat = False
+
+@app.route("/api/heartbeat", methods=["POST"])
+def heartbeat_endpoint():
+    global last_heartbeat, has_received_heartbeat
+    last_heartbeat = time.time()
+    has_received_heartbeat = True
+    return "", 204
+
+def monitor_heartbeat():
+    global last_heartbeat, has_received_heartbeat, whatsapp_process
+    # Wait for the browser to launch and load the page
+    time.sleep(15)
+    while True:
+        time.sleep(2)
+        if has_received_heartbeat and (time.time() - last_heartbeat > 8.0):
+            print("  [!] No heartbeat received. Exiting...")
+            if whatsapp_process:
+                try:
+                    import platform
+                    if platform.system().lower() == "windows":
+                        subprocess.run(["taskkill", "/F", "/T", "/PID", str(whatsapp_process.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    else:
+                        whatsapp_process.terminate()
+                except Exception:
+                    pass
+            os._exit(0)
 
 
 @app.after_request
@@ -135,7 +166,8 @@ def start_whatsapp_service():
             # DETACHED_PROCESS = 0x00000008, CREATE_NEW_PROCESS_GROUP = 0x00000200
             creationflags = 0x00000008 | 0x00000200
             
-        subprocess.Popen(
+        global whatsapp_process
+        whatsapp_process = subprocess.Popen(
             ["node", "index.js"],
             cwd=service_dir,
             creationflags=creationflags,
@@ -151,6 +183,11 @@ def start_whatsapp_service():
 if __name__ == "__main__":
     port = 5002
     
+    if check_port_open(port):
+        print(f"  [*] App already running on port {port}. Opening new window...")
+        open_app_window(f"http://localhost:{port}")
+        sys.exit(0)
+        
     if getattr(sys, "frozen", False):
         root = sys._MEIPASS
     else:
@@ -191,6 +228,9 @@ if __name__ == "__main__":
     
     # Start WhatsApp companion service in background thread
     threading.Thread(target=start_whatsapp_service, daemon=True).start()
+    
+    # Start heartbeat monitor thread
+    threading.Thread(target=monitor_heartbeat, daemon=True).start()
     
     # Launch browser window in background thread after 1 sec delay
     threading.Thread(target=lambda: (time.sleep(1.0), open_app_window(f"http://localhost:{port}")), daemon=True).start()
