@@ -1,0 +1,207 @@
+[
+  {
+    "id": 2,
+    "fecha": "02/06/2026",
+    "hora_registro": "05:58",
+    "hora_retiro": "",
+    "ts_inicio": 1780390717.2215018,
+    "ts_entrega": null,
+    "cliente": "Facu",
+    "telefono": "",
+    "notas": "",
+    "detalle_compact": "MUZZARELLA (Media): 10",
+    "detalle": "10x MUZZARELLA (Media)",
+    "items": [
+      {
+        "producto_id": 2,
+        "nombre": "MUZZARELLA",
+        "tipo_id": 1001,
+        "tipo": "Pizza",
+        "var_tipo": "",
+        "var_cantidad": "Media",
+        "precio": 14000,
+        "cantidad": 10,
+        "descuento_efectivo": false
+      }
+    ],
+    "subtotal": 140000,
+    "descuento": 0.0,
+    "total": 140000,
+    "pago": {
+      "metodo": "No especificado"
+    },
+    "envio": {
+      "envio": false
+    },
+    "estado": "Entregado",
+    "elapsed": 43509.13869214058,
+    "pagado": true
+  },
+  {
+    "id": 3,
+    "fecha": "02/06/2026",
+    "hora_registro": "06:00",
+    "hora_retiro": "",
+    "ts_inicio": 1780391365.602384,
+    "ts_entrega": null,
+    "cliente": "Facu",
+    "telefono": "",
+    "notas": "",
+    "detalle_compact": "MUZZARELLA (Entera): 1",
+    "detalle": "1x MUZZARELLA (Entera)",
+    "items": [
+      {
+        "producto_id": 2,
+        "nombre": "MUZZARELLA",
+        "tipo_id": 1001,
+        "tipo": "Pizza",
+        "var_tipo": "",
+        "var_cantidad": "Entera",
+        "precio": 14000,
+        "cantidad": 1,
+        "descuento_efectivo": false
+      }
+    ],
+    "subtotal": 14000,
+    "descuento": 0.0,
+    "total": 14000,
+    "pago": {
+      "metodo": "No especificado"
+    },
+    "envio": {
+      "envio": false
+    },
+    "estado": "Entregado",
+    "elapsed": 42860.17935180664,
+    "pagado": true
+  },
+  {
+    "id": 4,
+    "fecha": "02/06/2026",
+    "hora_registro": "18:05",
+    "hora_retiro": "",
+    "ts_inicio": 1780434343.933068,
+    "ts_entrega": null,
+    "cliente": "Nasdas",
+    "telefono": "",
+    "notas": "",
+    "detalle_compact": "SPRITE 1.5L: 1",
+    "detalle": "1x SPRITE 1.5L",
+    "items": [
+      {
+        "producto_id": 7,
+        "nombre": "SPRITE 1.5L",
+        "tipo_id": 1003,
+        "tipo": "Bebidas",
+        "var_tipo": "",
+        "var_cantidad": "",
+        "precio": 3200,
+        "cantidad": 1,
+        "descuento_efectivo": false
+      }
+    ],
+    "subtotal": 3200,
+    "descuento": 0.0,
+    "total": 3200,
+    "pago": {
+      "metodo": "Efectivo",
+      "total_efectivo": 3200
+    },
+    "envio": {
+      "envio": false
+    },
+    "estado": "Entregado",
+    "elapsed": 11900.81736588478,
+    "descuento_pct": 0,
+    "pagado": true
+  },
+  {
+    "id": 5,
+    "fecha": "02/06/2026",
+    "hora_registro": "21:23",
+    "hora_retiro": "",
+    "ts_inicio": 1780446229.084742,
+    "ts_entrega": null,
+    "cliente": "Faca",
+    "telefono": "",
+    "notas": "",
+    "detalle_compact": "CARNE — Frita: 22\nJAMON Y QUESO — Horno: 1",
+    "detalle": "22x CARNE — Frita, 1x JAMON Y QUESO — Horno",
+    "items": [
+      {
+        "cantidad": 22,
+        "descuento_efectivo": true,
+        "nombre": "CARNE",
+        "precio": 1900,
+        "producto_id": 1,
+        "tipo": "Empanadas",
+        "tipo_id": 1000,
+        "var_cantidad": "",
+        "var_tipo": "Frita"
+      },
+      {
+        "producto_id": 4,
+        "nombre": "JAMON Y QUESO",
+        "tipo_id": 1000,
+        "tipo": "Empanadas",
+        "var_tipo": "Horno",
+        "var_cantidad": "",
+        "precio": 1900,
+        "cantidad": 1,
+        "descuento_efectivo": true
+      }
+    ],
+    "subtotal": 43700,
+    "descuento": 0.0,
+    "total": 43700,
+    "pago": {
+      "metodo": "No especificado"
+    },
+    "envio": {
+      "envio": false
+    },
+    "estado": "Entregado",
+    "elapsed": 11.984692811965942,
+    "descuento_pct": 0,
+    "pagado": true
+  },
+  {
+    "id": 6,
+    "fecha": "02/06/2026",
+    "hora_registro": "22:55",
+    "hora_retiro": "",
+    "ts_inicio": 1780454243.291474,
+    "ts_entrega": null,
+    "cliente": "Test Client",
+    "telefono": "",
+    "notas": "",
+    "detalle_compact": "COCA COLA 1.5L: 1",
+    "detalle": "1x COCA COLA 1.5L",
+    "items": [
+      {
+        "producto_id": 3,
+        "nombre": "COCA COLA 1.5L",
+        "tipo_id": 1003,
+        "tipo": "Bebidas",
+        "var_tipo": "",
+        "var_cantidad": "",
+        "precio": 2000,
+        "cantidad": 1,
+        "descuento_efectivo": false
+      }
+    ],
+    "subtotal": 2000,
+    "descuento": 0.0,
+    "total": 2000,
+    "pago": {
+      "metodo": "Efectivo",
+      "total_efectivo": 2000
+    },
+    "envio": {
+      "envio": false
+    },
+    "estado": "Listo",
+    "elapsed": 29.565570831298828,
+    "pagado": false
+  }
+]

@@ -1,0 +1,37 @@
+    <!-- ── CATÁLOGO & CATEGORÍAS (TIPOS) ───────────────────────── -->
+    <section class="section" id="sec-catalogo">
+
+      <!-- Sub-tabs principales -->
+      <div class="sub-tabs" id="cat-main-tabs" style="margin-bottom: 15px;">
+        <button class="sub-tab active" data-cat="productos" onclick="switchCatTab('productos')">🍔 Productos</button>
+        <button class="sub-tab" data-cat="tipos" onclick="switchCatTab('tipos')">🏷️ Categorías</button>
+      </div>
+
+      <!-- ══ PRODUCTOS ══ -->
+      <div id="cat-productos-section">
+        <div style="display:flex; gap:10px; margin-bottom:12px; align-items:center;">
+          <select id="catalogo-tipo-filter" style="width:200px;">
+            <option value="">// TODOS</option>
+          </select>
+          <button class="btn btn-sm btn-primary" onclick="openProductoModal()">+ NUEVO PRODUCTO</button>
+        </div>
+        <div id="catalogo-table-container"></div>
+      </div>
+
+      <!-- ══ CATEGORÍAS (TIPOS) ══ -->
+      <div id="cat-tipos-section" style="display:none;">
+        <div style="margin-bottom:12px;">
+          <button class="btn btn-sm btn-primary" onclick="openTipoModal()">+ NUEVA CATEGORÍA</button>
+        </div>
+        <div class="two-col panel" id="tipos-container">
+          <div class="col-list" id="tipos-list"></div>
+          <div class="col-detail" id="tipos-detail">
+            <div class="empty-state">
+              <div class="empty-icon">&lt;/&gt;</div>
+              <p>Seleccioná una categoría para ver detalles</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>

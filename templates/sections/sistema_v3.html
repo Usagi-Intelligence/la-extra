@@ -1,0 +1,136 @@
+<!-- ── SISTEMA ─────────────────────────────────────── -->
+<section class="section" id="sec-sistema">
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+    
+    <!-- Columna Izquierda -->
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      
+      <!-- DATOS DEL NEGOCIO -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>DATOS DEL NEGOCIO</span>
+        </div>
+        <div class="panel-body" id="config-form">
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" id="cfg-nombre">
+          </div>
+          <div class="form-group">
+            <label>Dirección</label>
+            <input type="text" id="cfg-direccion">
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="text" id="cfg-telefono">
+          </div>
+          <div class="form-group">
+            <label>Instagram</label>
+            <input type="text" id="cfg-instagram">
+          </div>
+          <button class="btn btn-primary" onclick="saveConfig()">GUARDAR CONFIG</button>
+          <div class="dot-sep" style="margin-top: 15px; margin-bottom: 12px;"></div>
+          <div style="font-size:0.75rem; text-align:center; color:var(--text-muted); font-family:var(--font-body); letter-spacing:0.02em;">
+            <span>Programado por <strong style="color:var(--text-dark);">F. Prosiuk</strong></span>
+            <a href="https://instagram.com/fnprosiuk" target="_blank" style="display:inline-flex; align-items:center; gap:3px; color:var(--accent); text-decoration:none; margin-left:6px; font-weight:600; transition:color 0.2s;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; display:inline-block;"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+              @fnprosiuk
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- OPCIONES -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>OPCIONES</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
+              <input type="checkbox" id="cfg-reiniciar-stock" onchange="saveConfig()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
+              Reiniciar stock diariamente
+            </label>
+            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: el stock arranca desde cero cada día. Inactivo: el sobrante del día anterior se acumula al siguiente.</div>
+          </div>
+          <div class="dot-sep" style="margin-top: 15px; margin-bottom: 12px;"></div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
+              <input type="checkbox" id="cfg-layout-vertical" onchange="toggleLayoutVertical()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
+              Pestañas en panel izquierdo (Alineación vertical)
+            </label>
+            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: muestra el menú principal en el lateral izquierdo. Inactivo: lo muestra horizontalmente arriba.</div>
+          </div>
+          <div class="dot-sep" style="margin-top: 15px; margin-bottom: 12px;"></div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
+              <input type="checkbox" id="cfg-mute-system-sounds" onchange="toggleMuteSystemSounds()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
+              Silenciar sonidos del sistema (mantiene notificaciones de WhatsApp)
+            </label>
+            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: silencia sonidos de clics, hovers, etc. Solo suenan nuevos mensajes.</div>
+          </div>
+          <div class="dot-sep" style="margin-top: 15px; margin-bottom: 12px;"></div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
+              <input type="checkbox" id="cfg-auto-limpiar-media" onchange="saveConfig()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
+              Auto-limpiar multimedia al iniciar la aplicación
+            </label>
+            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: elimina todas las imágenes y audios locales de WhatsApp guardados al iniciar la app para ahorrar espacio.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Columna Derecha -->
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      
+      <!-- CONEXIÓN WHATSAPP -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>CONEXIÓN WHATSAPP (EVOLUTION API)</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label>URL del Servidor</label>
+            <input type="text" id="cfg-wa-url" placeholder="Ej: http://localhost:8080">
+          </div>
+          <div class="form-group">
+            <label>API Key / Token</label>
+            <input type="password" id="cfg-wa-token" placeholder="Token de Evolution API">
+          </div>
+          <div class="form-group">
+            <label>Instancia</label>
+            <input type="text" id="cfg-wa-instance" placeholder="Ej: laextra">
+          </div>
+          <button class="btn btn-primary" onclick="saveConfig()">GUARDAR CONEXIÓN</button>
+        </div>
+      </div>
+
+      <!-- HERRAMIENTAS -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>HERRAMIENTAS</span>
+        </div>
+        <div class="panel-body">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn" onclick="downloadBackup()">↓ BACKUP DATA</button>
+            <button class="btn btn-danger" onclick="resetDia()">✕ RESET DÍA</button>
+            <button class="btn btn-danger" onclick="openBorrarDatosModal()">✕ BORRAR DATOS...</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SYSTEM INFO -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>SYSTEM INFO</span>
+        </div>
+        <div class="panel-body" id="system-info">
+          <div class="loading">CARGANDO...</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>

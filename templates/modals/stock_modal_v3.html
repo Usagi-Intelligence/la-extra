@@ -1,0 +1,69 @@
+<!-- ═══ MODAL: Stock ═══ -->
+<div class="modal-overlay" id="modal-stock">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 id="stock-modal-title">// CARGAR STOCK</h2>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group" style="flex: 1;">
+          <label>Categoría</label>
+          <select id="stock-categoria-sel" onchange="onStockCategoriaChange()">
+            <option value="" disabled selected>Seleccionar</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label>Producto *</label>
+          <select id="stock-producto-id" disabled>
+            <option value="" disabled selected>Seleccionar</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cantidad *</label>
+          <input type="number" id="stock-cantidad" min="1" value="1">
+        </div>
+        <div class="form-group" style="max-width:130px;">
+          <label>Unidad</label>
+          <select id="stock-unidad">
+            <option value="unidades">Unidades</option>
+            <option value="docenas">Docenas</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeStockModal()">CANCELAR</button>
+      <button class="btn btn-primary" id="stock-submit-btn" onclick="submitStock()">AGREGAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Ajuste de Stock ═══ -->
+<div class="modal-overlay" id="modal-stock-ajuste">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header">
+      <h2>// AJUSTAR STOCK</h2>
+    </div>
+    <div class="modal-body">
+      <div style="font-family:var(--font-mono); font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;" id="ajuste-item-nombre"></div>
+      
+      <div class="form-group">
+        <label>Operación y cantidad</label>
+        <div style="display: flex; gap: 8px;">
+          <select id="ajuste-operacion" style="flex: 1.2; font-family: var(--font-mono); font-size: 0.85rem;">
+            <option value="agregar">Agregar</option>
+            <option value="restar">Restar</option>
+            <option value="indicar">Indicar total</option>
+          </select>
+          <input type="number" id="ajuste-cantidad" min="0" placeholder="Ej: 10" style="flex: 0.8; width: 100px;">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeStockAjuste()">CANCELAR</button>
+      <button class="btn btn-primary" onclick="submitAjuste()">CONFIRMAR</button>
+    </div>
+  </div>
+</div>

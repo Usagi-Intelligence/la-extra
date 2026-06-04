@@ -1,0 +1,43 @@
+<!-- ═══ MODAL: Categoría (Tipo) ═══ -->
+<div class="modal-overlay" id="modal-tipo">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header">
+      <h2 id="tipo-modal-title">// NUEVA CATEGORÍA</h2>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nombre *</label>
+        <input type="text" id="tipo-nombre">
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+        <label class="sf-check">
+          <input type="checkbox" id="tipo-var-tipo">
+          <span class="box"></span>
+          <span>Opciones de cocción (ej: Frita/Horno)</span>
+        </label>
+        <label class="sf-check">
+          <input type="checkbox" id="tipo-var-cant">
+          <span class="box"></span>
+          <span>Opciones de tamaño (ej: Media/Entera)</span>
+        </label>
+        <label class="sf-check">
+          <input type="checkbox" id="tipo-desc-efectivo" checked>
+          <span class="box"></span>
+          <span>Descuento efectivo</span>
+        </label>
+      </div>
+      <div class="form-group" id="tipo-vt-area" style="display:none;">
+        <label>Opciones de Cocción (una por línea)</label>
+        <textarea id="tipo-vt-list" placeholder="Frita&#10;Horno"></textarea>
+      </div>
+      <div class="form-group" id="tipo-vc-area" style="display:none;">
+        <label>Opciones de Tamaño (una por línea)</label>
+        <textarea id="tipo-vc-list" placeholder="Media&#10;Entera"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTipoModal()">CANCELAR</button>
+      <button class="btn btn-primary" onclick="submitTipo()">GUARDAR</button>
+    </div>
+  </div>
+</div>

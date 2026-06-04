@@ -1,0 +1,188 @@
+<!-- ═══ MODAL: Nuevo Pedido ═══ -->
+<div class="modal-overlay" id="modal-pedido">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-header">
+      <h2 id="pedido-modal-title">// NUEVO PEDIDO</h2>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cliente *</label>
+          <input type="text" id="ped-cliente" placeholder="Nombre del cliente">
+        </div>
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="tel" id="ped-telefono" placeholder="Opcional">
+        </div>
+        <div class="form-group" style="min-width: 250px;">
+          <label>Hora Retiro</label>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <input type="number" id="ped-hora-hh" placeholder="HH" min="0" max="23" style="width: 50px; text-align: center;" oninput="if(value.length>2)value=value.slice(0,2)" onchange="if(value !== '') { let v = parseInt(value); if(v > 23) v = 23; if(v < 0) v = 0; value = String(v).padStart(2, '0'); }">
+            <span style="font-family: var(--font-mono); font-weight: bold; font-size: 1.1rem; color: var(--accent);">:</span>
+            <input type="number" id="ped-hora-mm" placeholder="MM" min="0" max="59" style="width: 50px; text-align: center;" oninput="if(value.length>2)value=value.slice(0,2)" onchange="if(value !== '') { let v = parseInt(value); if(v > 59) v = 59; if(v < 0) v = 0; value = String(v).padStart(2, '0'); }">
+            <div style="display: flex; gap: 4px; margin-left: 8px;">
+              <button type="button" class="btn btn-sm btn-ghost" onclick="addMinutesToRetiro(10)" style="padding: 4px 8px; font-family: var(--font-mono);">+10</button>
+              <button type="button" class="btn btn-sm btn-ghost" onclick="addMinutesToRetiro(15)" style="padding: 4px 8px; font-family: var(--font-mono);">+15</button>
+              <button type="button" class="btn btn-sm btn-ghost" onclick="addMinutesToRetiro(30)" style="padding: 4px 8px; font-family: var(--font-mono);">+30</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scan-sep"></div>
+
+      <div class="form-group">
+        <label>Agregar Productos</label>
+        <div class="search-box" style="position:relative;">
+          <input type="search" id="ped-search" placeholder="BUSCAR POR NOMBRE O ABREVIACIÓN..." autocomplete="off">
+          <div class="search-results" id="ped-search-results"></div>
+        </div>
+      </div>
+
+      <div id="ped-variant-area" style="display:none;" class="panel">
+        <div class="panel-header">
+          <span id="ped-variant-product-name">PRODUCTO</span>
+        </div>
+        <div class="panel-body">
+          <div id="ped-variant-tipo-row" style="display:none; margin-bottom:10px;">
+            <label>Opción de Cocción</label>
+            <div class="variant-pills" id="ped-variant-tipo-pills"></div>
+          </div>
+          <div id="ped-variant-cant-row" style="display:none; margin-bottom:10px;">
+            <label>Opción de Tamaño</label>
+            <div class="variant-pills" id="ped-variant-cant-pills"></div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-end;">
+            <div class="form-group" style="width:100px; margin:0;">
+              <label>Cantidad</label>
+              <input type="number" id="ped-variant-qty" value="1" min="1" max="9999">
+            </div>
+            <div class="form-group" style="width:120px; margin:0; display:none;">
+              <label>Precio Unit.</label>
+              <input type="number" id="ped-variant-price" value="0" min="0" readonly style="background:var(--bg-panel);">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ped-promo-picker-area" style="display:none;" class="panel">
+        <div class="panel-header">
+          <span id="ped-promo-picker-title">CONFIGURAR OPCIONES DE LA PROMO</span>
+        </div>
+        <div class="panel-body">
+          <div id="ped-promo-picker-steps" style="display:flex; flex-direction:column; gap:12px; margin-bottom:12px;">
+            <!-- Dinamically loaded promo placeholders needing type-variant choices -->
+          </div>
+          <div style="display:flex; gap:14px; align-items:flex-end; margin-top:10px;">
+            <input type="hidden" id="ped-promo-price" value="0">
+            <button class="btn btn-primary" onclick="confirmPromoPicker()">AGREGAR PROMO</button>
+            <button class="btn btn-ghost" onclick="cancelPromoPicker()">CANCELAR</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px;">
+        <div class="panel-header">
+          <span>ITEMS <span id="ped-item-count" style="font-weight:400; font-family:var(--font-mono); font-size:0.72rem;">[0]</span></span>
+        </div>
+        <div class="panel-body" style="padding:0;">
+          <div id="ped-items-header" style="display:none; grid-template-columns: 40px 1fr 90px 90px 110px; gap: 8px; padding: 8px 12px; background: var(--bg-off-white); border-bottom: 1px solid var(--bg-cool-gray); font-family: var(--font-body); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">
+            <span>CANT</span>
+            <span>PRODUCTO</span>
+            <span style="text-align: right;">UNIDAD</span>
+            <span style="text-align: right;">TOTAL</span>
+            <span></span>
+          </div>
+          <ul class="order-items-list" id="ped-items-list">
+            <li class="empty-state" style="padding:20px;"><p>// No hay items</p></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="scan-sep"></div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px;">
+        <div class="form-group" style="margin: 0; display: flex; flex-direction: column;">
+          <label>Envío</label>
+          <div class="envio-section" id="ped-envio-section" style="margin: 0; flex: 1;">
+            <div class="segmented-control" id="ped-envio-segmented">
+              <button type="button" class="segment-btn active" id="btn-envio-no" tabindex="-1" onclick="setEnvioActive(false)">NO</button>
+              <button type="button" class="segment-btn" id="btn-envio-si" tabindex="-1" onclick="setEnvioActive(true)">SÍ</button>
+            </div>
+            <!-- Hidden checkbox for backward-compatibility with JS toggleEnvio and totals -->
+            <input type="checkbox" id="ped-envio-toggle" style="display: none;" onchange="toggleEnvio()">
+            
+            <div class="envio-fields" id="ped-envio-fields">
+              <div class="form-row" style="margin-top:8px;">
+                <div class="form-group">
+                  <label>Dirección</label>
+                  <input type="text" id="ped-envio-dir" placeholder="Dirección de envío">
+                </div>
+                <div class="form-group">
+                  <label>Costo Envío</label>
+                  <input type="number" id="ped-envio-costo" value="0" min="0">
+                </div>
+              </div>
+              <div style="display:flex; gap:16px;">
+                <label class="sf-check sf-check-sm">
+                  <input type="radio" name="ped-envio-tipo" id="ped-envio-tipo-interno" value="interno" checked onchange="onEnvioTipoChange()">
+                  <span class="box"></span>
+                  <span>Interno</span>
+                </label>
+                <label class="sf-check sf-check-sm">
+                  <input type="radio" name="ped-envio-tipo" id="ped-envio-tipo-externo" value="externo" onchange="onEnvioTipoChange()">
+                  <span class="box"></span>
+                  <span>Externo</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin: 0; display: flex; flex-direction: column;">
+          <label>Método de Pago</label>
+          <!-- The focusable button/container widget -->
+          <div class="payment-widget" id="ped-pago-container" tabindex="0" style="flex: 1;">
+            <div class="pay-option" data-value="Efectivo" data-index="1">
+              <span class="pay-num">1</span>
+              <span class="pay-text">EFECTIVO</span>
+            </div>
+            <div class="pay-option" data-value="Transferencia" data-index="2">
+              <span class="pay-num">2</span>
+              <span class="pay-text">TRANSFER.</span>
+            </div>
+            <div class="pay-option" data-value="Débito" data-index="3">
+              <span class="pay-num">3</span>
+              <span class="pay-text">DÉBITO</span>
+            </div>
+            <div class="pay-option" data-value="Crédito" data-index="4">
+              <span class="pay-num">4</span>
+              <span class="pay-text">CRÉDITO</span>
+            </div>
+            <div class="pay-option" data-value="Mixto" data-index="5">
+              <span class="pay-num">5</span>
+              <span class="pay-text">MIXTO</span>
+            </div>
+          </div>
+          <!-- Keep hidden input for backward-compatibility with rest of code -->
+          <input type="hidden" id="ped-pago-metodo" value="Mixto">
+          <input type="hidden" id="ped-descuento" value="0">
+        </div>
+      </div>
+
+
+      <div class="order-totals" id="ped-totals">
+        <div class="total-row"><span>SUBTOTAL</span><span id="ped-subtotal">$0</span></div>
+        <div class="total-row" id="ped-desc-row" style="display:none"><span>DESCUENTO</span><span id="ped-descuento-val">-$0</span></div>
+        <div class="total-row" id="ped-envio-row" style="display:none"><span>ENVÍO</span><span id="ped-envio-val">$0</span></div>
+        <div class="total-row" id="ped-efectivo-row" style="display:none"><span>DTO EFECTIVO 10.5%</span><span id="ped-efectivo-val">$0</span></div>
+        <div class="total-row total-final"><span>TOTAL</span><span id="ped-total">$0</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="ped-delete-btn" style="display: none;" onclick="deletePedidoFromModal()">ELIMINAR</button>
+      <button class="btn" onclick="closePedidoModal()">CANCELAR</button>
+      <button class="btn btn-primary" id="ped-submit-btn" onclick="submitPedido()">CONFIRMAR PEDIDO</button>
+    </div>
+  </div>
+</div>

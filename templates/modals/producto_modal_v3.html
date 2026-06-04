@@ -1,0 +1,66 @@
+<!-- ═══ MODAL: Producto ═══ -->
+<div class="modal-overlay" id="modal-producto">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <h2 id="producto-modal-title">// NUEVO PRODUCTO</h2>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input type="text" id="prod-nombre">
+        </div>
+        <div class="form-group" style="max-width:120px;">
+          <label>Abreviación</label>
+          <input type="text" id="prod-abrev" placeholder="AUTO" maxlength="4" oninput="this.value = this.value.toUpperCase()" style="text-transform: uppercase;">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Categoría</label>
+          <select id="prod-tipo"></select>
+        </div>
+      </div>
+      <div class="form-group" id="prod-precio-group" style="display:none;">
+        <label id="prod-precio-label">Precio</label>
+        <input type="number" id="prod-precio" value="0" min="0" style="max-width:200px;">
+      </div>
+      <div class="form-group">
+        <label class="sf-check">
+          <input type="checkbox" id="prod-excluir-desc-efectivo">
+          <span class="box"></span>
+          <span>Excluir del descuento en efectivo</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="display:none;">
+        <label class="sf-check">
+          <input type="checkbox" id="prod-desc-efectivo" checked>
+          <span class="box"></span>
+          <span>Descuento efectivo</span>
+        </label>
+      </div>
+      <div class="scan-sep"></div>
+      <div id="prod-variantes-area">
+        <div class="panel-header" style="margin-bottom:8px;">
+          <span>PRECIOS POR OPCIÓN</span>
+        </div>
+        <div id="prod-variantes-grid"></div>
+      </div>
+
+      <div id="prod-promo-area" style="display:none; margin-top:15px;">
+        <div class="panel-header" style="margin-bottom:8px;">
+          <span>CONSTITUCIÓN DE LA PROMO (ITEMS)</span>
+        </div>
+        <div id="prod-promo-builder-list" style="margin-bottom:12px; display:flex; flex-direction:column; gap:8px;">
+          <!-- Items de la promoción renderizados dinámicamente -->
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="addPromoItemRow()" type="button" style="margin-top:5px;">+ AGREGAR ITEM A LA PROMO</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeProductoModal()">CANCELAR</button>
+      <button class="btn btn-primary" onclick="submitProducto()">GUARDAR</button>
+    </div>
+  </div>
+</div>

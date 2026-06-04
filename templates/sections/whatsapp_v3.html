@@ -1,0 +1,101 @@
+<!-- ── WHATSAPP ─────────────────────────────────────── -->
+<section class="section" id="sec-whatsapp">
+  <!-- Estado: Sin configurar -->
+  <div id="wa-unconfigured" style="display:none; text-align: center; padding: 40px 20px;">
+    <div class="panel" style="max-width: 480px; margin: 0 auto;">
+      <div class="panel-header" style="justify-content: center;">
+        <span>WHATSAPP NO CONFIGURADO</span>
+      </div>
+      <div class="panel-body">
+        <div style="font-size: 3rem; margin-bottom: 15px;">🔌</div>
+        <p style="font-family: var(--font-body); color: var(--text-dark); line-height: 1.6; font-size: 0.88rem; margin-bottom: 20px;">
+          El servicio de WhatsApp no está configurado.
+        </p>
+        <p style="font-family: var(--font-body); color: var(--text-muted); line-height: 1.5; font-size: 0.8rem; margin-bottom: 0;">
+          Por favor, ve a la pestaña <strong>Información</strong> (sección Configuración de Servidor) para configurar la URL y el Token de conexión de Evolution API.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Cargando -->
+  <div id="wa-loading" style="display:none; text-align: center; padding: 80px 20px;">
+    <div class="panel" style="max-width: 400px; margin: 0 auto;">
+      <div class="panel-body">
+        <div class="loading" style="font-size: 1.2rem; font-family: var(--font-header); letter-spacing: 0.1em;">
+          CONECTANDO CON SERVIDOR...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Desconectado / Generar QR -->
+  <div id="wa-disconnected" style="display:none; text-align: center; padding: 30px;">
+    <div class="panel" style="max-width: 520px; margin: 0 auto;">
+      <div class="panel-header" style="justify-content: center;">
+        <span>VINCULAR WHATSAPP</span>
+      </div>
+      <div class="panel-body" style="text-align:center;">
+        <p style="font-family: var(--font-body); color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+          Escanea el código QR desde WhatsApp en tu celular: <strong>Dispositivos Vinculados → Vincular Dispositivo</strong>.
+        </p>
+        <div id="wa-qr-container" style="background: white; padding: 20px; display: inline-block; border-radius: 8px; border: 1px solid var(--bg-cool-gray); box-shadow: var(--shadow-neo); margin-bottom: 20px;">
+          <div style="width:200px; height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.8rem;">
+            Generando QR...
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button class="btn" onclick="checkWhatsAppStatus()">↻ ACTUALIZAR QR</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Conectado (Chat UI) -->
+  <div id="wa-chat-layout" class="whatsapp-chat-container" style="display:none; height: calc(100vh - 230px); min-height: 450px; border: 1px solid var(--bg-cool-gray); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-neo);">
+    <!-- Sidebar de Chats -->
+    <div class="whatsapp-sidebar" style="width: 320px; border-right: 1px solid var(--bg-cool-gray); display: flex; flex-direction: column; background: var(--bg-off-white);">
+      <div style="padding: 12px 16px; border-bottom: 1px solid var(--bg-cool-gray); display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+        <span style="font-family: var(--font-header); font-weight: 700; font-size: 0.8rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em;">CHATS</span>
+        <div style="display: flex; gap: 4px;">
+          <button class="btn" onclick="markAllWhatsAppAsRead()" style="padding: 2px 6px; font-size: 0.62rem;" title="Marcar todos como leídos">✓ LEÍDO</button>
+        </div>
+      </div>
+      <div style="padding: 10px; border-bottom: 1px solid var(--bg-cool-gray);">
+        <input type="text" id="wa-chat-search" placeholder="Buscar chat..." oninput="filterChats()" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--bg-cool-gray); font-family: var(--font-body); font-size: 0.85rem; background: var(--bg-off-white); color: var(--text-dark); box-sizing: border-box;">
+      </div>
+      <div id="wa-chats-list" style="flex: 1; overflow-y: auto;">
+        <!-- Chats will be listed here -->
+      </div>
+    </div>
+
+    <!-- Area de Conversación -->
+    <div class="whatsapp-message-area" style="flex: 1; display: flex; flex-direction: column; background: var(--bg-off-white);">
+      <!-- Header del Chat Activo -->
+      <div id="wa-active-chat-header" style="height: 60px; padding: 0 20px; border-bottom: 1px solid var(--bg-cool-gray); display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="wa-active-chat-name" style="font-family: var(--font-header); font-weight: 700; color: var(--text-dark); font-size: 0.95rem;">Selecciona un chat</span>
+            <button id="wa-rename-btn" class="btn" style="display: none; padding: 2px 6px; font-size: 0.65rem; text-transform: uppercase; margin-bottom: 2px;" onclick="promptRenameContact()">Renombrar</button>
+            <button id="wa-popup-btn" class="btn" style="display: none; padding: 2px 6px; font-size: 0.65rem; text-transform: uppercase; margin-bottom: 2px;" onclick="pinChatForNextOrder()">↑ Nota Pedido</button>
+          </div>
+          <span id="wa-active-chat-phone" style="font-family: var(--font-body); font-size: 0.75rem; color: var(--text-muted);">para comenzar a chatear</span>
+        </div>
+        <button id="wa-delete-chat-btn" class="btn btn-danger" onclick="deleteActiveChat()" style="display:none; padding: 4px 8px; font-size: 0.7rem; font-family: var(--font-header);">ELIMINAR</button>
+      </div>
+
+      <!-- Historial de Mensajes -->
+      <div id="wa-messages-history" style="flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.9rem;">
+          No hay chat seleccionado
+        </div>
+      </div>
+
+      <!-- Input de Mensaje -->
+      <div id="wa-message-input-bar" style="padding: 15px; border-top: 1px solid var(--bg-cool-gray); display: none; align-items: center; gap: 10px;">
+        <input type="text" id="wa-message-input" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter') sendWhatsAppMessage()" style="flex: 1; padding: 10px 15px; border-radius: 6px; border: 1px solid var(--bg-cool-gray); font-family: var(--font-body); font-size: 0.88rem; background: var(--bg-off-white); color: var(--text-dark);">
+        <button class="btn btn-primary" onclick="sendWhatsAppMessage()" style="padding: 10px 20px; font-family: var(--font-header);">ENVIAR</button>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,112 @@
+<!-- ═══ MODAL: Borrar Datos ═══ -->
+<div class="modal-overlay" id="modal-borrar-datos" style="display:none; position:fixed; inset:0; z-index:9999; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:420px; background:var(--bg-white, #fff); border:2px solid var(--bg-cool-gray); border-left:8px solid #e74c3c; border-radius:8px; padding:24px 28px; box-shadow:0 8px 40px rgba(0,0,0,0.18); animation:slideUp 0.2s cubic-bezier(.4,1.2,.6,1) both;">
+    <div class="modal-header" style="margin-bottom:16px;">
+      <h2 style="font-family:var(--font-head); font-size:1.15rem; font-weight:700; color:var(--text-dark); letter-spacing:0.04em; margin:0;">// ELIMINACIÓN DE DATOS</h2>
+    </div>
+    
+    <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+      <p style="font-family:var(--font-body); font-size:0.85rem; color:var(--text-muted); line-height:1.45; margin:0;">
+        Seleccioná los datos que querés borrar permanentemente:
+      </p>
+      
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <label class="del-checkbox-label">
+          <input type="checkbox" id="del-media" class="del-checkbox">
+          <span>Limpiar multimedia WhatsApp</span>
+        </label>
+        <label class="del-checkbox-label">
+          <input type="checkbox" id="del-catalogo" class="del-checkbox">
+          <span>Borrar catálogo completo</span>
+        </label>
+        <label class="del-checkbox-label">
+          <input type="checkbox" id="del-pedidos" class="del-checkbox">
+          <span>Eliminar historial de pedidos</span>
+        </label>
+      </div>
+
+      <div style="background:rgba(231, 76, 60, 0.08); border:1px solid rgba(231, 76, 60, 0.25); border-radius:6px; padding:12px; font-family:var(--font-body); font-size:0.75rem; color:#c0392b; line-height:1.45;">
+        <strong>¡ATENCIÓN!</strong> La eliminación de los datos seleccionados es permanente y no se puede deshacer.
+      </div>
+    </div>
+    
+    <div class="modal-footer" style="display:flex; gap:12px; justify-content:flex-end; align-items:center; margin-top:20px;">
+      <button class="btn" onclick="closeBorrarDatosModal()" style="font-family:var(--font-header); font-weight:700; letter-spacing:0.04em; padding:8px 16px;">CANCELAR</button>
+      
+      <!-- Hold-to-confirm Button -->
+      <button id="btn-confirm-delete" class="hold-btn">
+        <span id="btn-confirm-text">ACEPTAR</span>
+        <div id="btn-confirm-progress"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+.del-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  color: var(--text-dark);
+  user-select: none;
+  padding: 6px 0;
+  transition: opacity 0.2s;
+}
+.del-checkbox-label:hover {
+  opacity: 0.85;
+}
+.del-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #e74c3c;
+}
+.hold-btn {
+  background: #ffffff;
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+  cursor: pointer;
+  font-family: var(--font-header);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  padding: 8px 24px;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  outline: none;
+  min-width: 120px;
+  height: 38px;
+  box-sizing: border-box;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.hold-btn:hover {
+  background: rgba(231, 76, 60, 0.04);
+}
+.hold-btn.holding {
+  border-color: #2ecc71;
+}
+#btn-confirm-text {
+  position: relative;
+  z-index: 2;
+  transition: opacity 0.15s ease;
+}
+#btn-confirm-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: #2ecc71; /* Emerald Green */
+  z-index: 1;
+  pointer-events: none;
+  transition: width 0.04s linear; /* Smooth progress bar expansion */
+}
+</style>

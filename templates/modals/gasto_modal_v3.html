@@ -1,0 +1,87 @@
+<!-- Modal: Agregar / Editar Gasto -->
+<div class="modal-overlay" id="modal-gasto">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h2 id="gasto-modal-title">// NUEVO GASTO</h2>
+    </div>
+    <div class="modal-body">
+
+      <!-- Tipo de gasto -->
+      <div class="form-group">
+        <label>Tipo de gasto</label>
+        <div style="display:flex; gap:8px;">
+          <label class="sf-check" id="gasto-tipo-fijo-label">
+            <input type="radio" name="gasto-tipo" id="gasto-tipo-fijo" value="fijo" onchange="onGastoTipoChange()">
+            <span class="box"></span>
+            Fijo
+          </label>
+          <label class="sf-check" id="gasto-tipo-particular-label">
+            <input type="radio" name="gasto-tipo" id="gasto-tipo-particular" value="particular" onchange="onGastoTipoChange()" checked>
+            <span class="box"></span>
+            Particular
+          </label>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label>Nombre</label>
+          <input type="text" id="gasto-nombre" placeholder="Selecciona una categoría...">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Categoría</label>
+          <select id="gasto-categoria" onchange="onGastoCategoriaChange()">
+            <option value="" disabled selected>— Elegir categoría —</option>
+            <option value="Bienes">🛒 Bienes</option>
+            <option value="Equipamiento">🔧 Equipamiento</option>
+            <option value="Servicios">💡 Servicios</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex: 1;">
+          <label>Monto ($)</label>
+          <input type="text" id="gasto-monto" value="" placeholder="0" inputmode="numeric" pattern="[0-9 ]*">
+        </div>
+        <!-- Fecha (solo particulares) -->
+        <div class="form-group" id="gasto-fecha-group" style="flex: 1; display: none;">
+          <label>Fecha</label>
+          <input type="date" id="gasto-fecha">
+        </div>
+      </div>
+
+      <!-- Configuración de Recurrencia (solo fijos) -->
+      <div id="gasto-recurrencia-group" style="display: none; margin-bottom: 14px;">
+        <div class="form-row">
+          <div class="form-group" style="flex: 1;">
+            <label>Próxima repetición</label>
+            <input type="date" id="gasto-recurrencia-fecha">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label>Repetir cada</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="number" id="gasto-recurrencia-cantidad" min="1" value="1" style="width: 70px; text-align: center;">
+              <select id="gasto-recurrencia-intervalo" style="flex: 1;">
+                <option value="dias">días</option>
+                <option value="semanas">semanas</option>
+                <option value="meses" selected>meses</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Descripción <span style="font-weight:400; color:var(--text-light);">(opcional)</span></label>
+        <textarea id="gasto-descripcion" rows="2" placeholder="Notas adicionales..."></textarea>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeGastoModal()">CANCELAR</button>
+      <button class="btn btn-primary" id="gasto-submit-btn" onclick="submitGasto()">GUARDAR GASTO</button>
+    </div>
+  </div>
+</div>
+

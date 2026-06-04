@@ -1,0 +1,19 @@
+    <!-- ── PEDIDOS ─────────────────────────────────────── -->
+    <section class="section active" id="sec-pedidos">
+      <div class="sub-tabs" id="pedidos-tabs">
+        <button class="sub-tab active" data-filter="Todos">Todos</button>
+        <button class="sub-tab" data-filter="En curso">En Curso</button>
+        <button class="sub-tab" data-filter="Listo">Listos</button>
+        <button class="sub-tab" data-filter="Entregado">Entregados</button>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:12px; align-items:center;">
+        <button class="btn btn-sm btn-primary" onclick="openPedidoModal()">+ NUEVO PEDIDO</button>
+        <div class="search-box" style="flex:1; max-width:280px;">
+          <input type="search" id="pedidos-search" placeholder="BUSCAR CLIENTE...">
+        </div>
+        <input type="date" id="pedidos-fecha" style="width:150px;">
+      </div>
+
+      <div id="pedidos-list"></div>
+    </section>

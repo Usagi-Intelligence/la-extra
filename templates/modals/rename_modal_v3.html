@@ -1,0 +1,18 @@
+<!-- ═══ MODAL: Renombrar Contacto ═══ -->
+<div class="modal-overlay" id="modal-rename">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h2>// RENOMBRAR CONTACTO</h2>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Nombre del contacto</label>
+        <input type="text" id="rename-contact-input" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--bg-cool-gray); font-family:var(--font-body); font-size:0.85rem; background:var(--bg-off-white); color:var(--text-dark); box-sizing:border-box;">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeRenameModal()">CANCELAR</button>
+      <button class="btn btn-primary" onclick="submitRenameContact()">GUARDAR</button>
+    </div>
+  </div>
+</div>

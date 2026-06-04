@@ -1,0 +1,92 @@
+    <!-- ── RESUMEN ─────────────────────────────────────── -->
+    <section class="section" id="sec-resumen">
+
+      <!-- Sub-tabs principales de Resumen -->
+      <div class="sub-tabs" id="resumen-main-tabs">
+        <button class="sub-tab active" data-resumen="ingresos" onclick="switchResumenTab('ingresos')">📈 Ingresos</button>
+        <button class="sub-tab" data-resumen="gastos" onclick="switchResumenTab('gastos')">💸 Gastos</button>
+        <button class="sub-tab" data-resumen="balance" onclick="switchResumenTab('balance')">📋 Cierres</button>
+      </div>
+
+      <!-- ══ INGRESOS ══ -->
+      <div id="resumen-ingresos-section">
+        <div class="stats-grid" id="resumen-stats"></div>
+        <div class="chart-container" id="resumen-chart">
+          <div class="chart-title">// Facturación — Últimos 7 Días</div>
+          <div class="bar-chart" id="chart-bars"></div>
+        </div>
+      </div>
+
+      <!-- ══ GASTOS ══ -->
+      <div id="resumen-gastos-section" style="display:none;">
+        <!-- Balance del mes -->
+        <div id="gastos-balance-cards" style="display:grid; grid-template-columns:repeat(3,1fr); gap:var(--gap); margin-bottom:var(--gap);"></div>
+
+        <!-- Tipo selector + botón add -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div class="sub-tabs" style="margin-bottom:0;">
+            <button class="sub-tab active" data-gtipo="fijo" onclick="switchGastoTipo('fijo')">Fijos</button>
+            <button class="sub-tab" data-gtipo="particular" onclick="switchGastoTipo('particular')">Particulares</button>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openGastoModal()">+ NUEVO GASTO</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-body" style="padding:12px;">
+            <div id="gastos-list"><div class="loading">CARGANDO...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ BALANCE ══ -->
+      <div id="resumen-balance-section" style="display:none;">
+        <!-- Apartado de Cierres y Balance -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>GENERAR CIERRE</span>
+          </div>
+          <div class="panel-body">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px;">
+              <!-- Columna Izquierda: Acciones de Cierre y Balance -->
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="btn" onclick="cierreDiario()" style="width: 100%; justify-content: center;">▸ CIERRE DIARIO (PDF)</button>
+                <div class="scan-sep" style="margin: 4px 0;"></div>
+                
+                <!-- Fila de Selección de Cierre Mensual -->
+                <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px;">
+                  <select id="cierre-mes-mes" style="font-family:var(--font-mono); font-size:0.75rem; font-weight:bold; height:36px; padding:2px;">
+                    <option value="01">Enero</option>
+                    <option value="02">Febrero</option>
+                    <option value="03">Marzo</option>
+                    <option value="04">Abril</option>
+                    <option value="05">Mayo</option>
+                    <option value="06">Junio</option>
+                    <option value="07">Julio</option>
+                    <option value="08">Agosto</option>
+                    <option value="09">Septiembre</option>
+                    <option value="10">Octubre</option>
+                    <option value="11">Noviembre</option>
+                    <option value="12">Diciembre</option>
+                  </select>
+                  <select id="cierre-mes-anio" style="font-family:var(--font-mono); font-size:0.75rem; font-weight:bold; height:36px; padding:2px;"></select>
+                </div>
+                
+                <button class="btn btn-primary" onclick="cierreMensual()" style="width: 100%; justify-content: center; font-weight: 700; height:38px;">▸ CIERRE MENSUAL (PDF)</button>
+              </div>
+              <!-- Columna Derecha: Configuración de Carpeta -->
+              <div style="display:flex; flex-direction:column; gap:10px; justify-content: flex-start; height: max-content;">
+                <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:5px;">
+                  <label style="font-family: var(--font-body); font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0;">Carpeta de Cierres</label>
+                  <div style="display:flex; gap:6px;">
+                    <input type="text" id="cfg-cierres-path" placeholder="C:\...">
+                    <button class="btn btn-sm" onclick="saveCierresPath()">SET</button>
+                  </div>
+                </div>
+                <button class="btn btn-sm" onclick="abrirCarpetaCierres()" style="justify-content: center; height:36px;">ABRIR CARPETA</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>

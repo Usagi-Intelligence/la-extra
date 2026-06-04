@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LA EXTRA — Control Desk v2.2</title>
+  <meta name="description" content="Sistema de gestión de pedidos — La Extra">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_v3.css') }}">
+</head>
+
+
+<body>
+<div id="hud-frame">
+
+  {% include 'components/nav_v3.html' %}
+
+  <!-- ═══ Main Content ═══ -->
+  <main id="main-content">
+    {% include 'sections/pedidos_v3.html' %}
+    {% include 'sections/catalogo_v3.html' %}
+    {% include 'sections/resumen_v3.html' %}
+    {% include 'sections/gastosstock_v3.html' %}
+    {% include 'sections/whatsapp_v3.html' %}
+    {% include 'sections/sistema_v3.html' %}
+  </main>
+
+  <!-- ═══ Status Bar ═══ -->
+  <footer id="status-bar">
+    <div class="status-left">
+      <span class="status-indicator">
+        <span class="status-dot"></span>
+        <span id="status-info">SYS ONLINE</span>
+      </span>
+    </div>
+    <div class="status-right">
+      <span>LA EXTRA // TERMINAL</span>
+    </div>
+  </footer>
+
+</div><!-- /hud-frame -->
+
+
+<!-- ═══ Toast ═══ -->
+<div id="toast-container"></div>
+
+<!-- ═══ MODALS ═══ -->
+{% include 'modals/pedido_modal_v3.html' %}
+{% include 'modals/producto_modal_v3.html' %}
+{% include 'modals/tipo_modal_v3.html' %}
+{% include 'modals/edit_pedido_modal_v3.html' %}
+{% include 'modals/confirm_modal_v3.html' %}
+{% include 'modals/stock_modal_v3.html' %}
+{% include 'modals/gasto_modal_v3.html' %}
+{% include 'modals/stock_warning_modal_v3.html' %}
+{% include 'modals/rename_modal_v3.html' %}
+{% include 'modals/borrar_datos_modal_v3.html' %}
+
+<script src="{{ url_for('static', filename='js/app_v3.js') }}"></script>
+
+</body>
+</html>

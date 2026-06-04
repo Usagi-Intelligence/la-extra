@@ -1,0 +1,39 @@
+[
+  {
+    "id": 1,
+    "fecha": "01/06/2026",
+    "hora_registro": "23:55",
+    "hora_retiro": "",
+    "ts_inicio": 1780368947.823195,
+    "ts_entrega": null,
+    "cliente": "Fac",
+    "telefono": "",
+    "notas": "",
+    "detalle_compact": "CARNE — Frita: 12",
+    "detalle": "12x CARNE — Frita",
+    "items": [
+      {
+        "producto_id": 1,
+        "nombre": "CARNE",
+        "tipo_id": 1000,
+        "tipo": "Empanadas",
+        "var_tipo": "Frita",
+        "var_cantidad": "",
+        "precio": 1900,
+        "cantidad": 12,
+        "descuento_efectivo": true
+      }
+    ],
+    "subtotal": 22800,
+    "descuento": 0.0,
+    "total": 22800,
+    "pago": {
+      "metodo": "No especificado"
+    },
+    "envio": {
+      "envio": false
+    },
+    "estado": "Entregado",
+    "elapsed": 5.671129941940308
+  }
+]

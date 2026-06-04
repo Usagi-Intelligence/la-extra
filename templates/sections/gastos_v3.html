@@ -1,0 +1,22 @@
+    <!-- ── GASTOS ─────────────────────────────────────── -->
+    <section class="section" id="sec-gastos">
+
+      <!-- Balance del mes -->
+      <div id="gastos-balance-cards" style="display:grid; grid-template-columns:repeat(3,1fr); gap:var(--gap); margin-bottom:var(--gap);"></div>
+
+      <!-- Tipo selector + botón add -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div class="sub-tabs" style="margin-bottom:0;">
+          <button class="sub-tab active" data-gtipo="fijo" onclick="switchGastoTipo('fijo')">Fijos</button>
+          <button class="sub-tab" data-gtipo="particular" onclick="switchGastoTipo('particular')">Particulares</button>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openGastoModal()">+ NUEVO GASTO</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-body" style="padding:12px;">
+          <div id="gastos-list"><div class="loading">CARGANDO...</div></div>
+        </div>
+      </div>
+
+    </section>
