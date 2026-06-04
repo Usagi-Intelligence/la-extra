@@ -494,14 +494,16 @@ def update_pedido(pid):
         for it in items:
             k = it.get("nombre", "?")
             if it.get("var_cantidad"):
-                k += f" ({it['var_cantidad']})"
+                clean_vc = dm.clean_variant_name(it["var_cantidad"])
+                if clean_vc:
+                    k += f" ({clean_vc})"
             if it.get("var_tipo"):
                 k += f" — {it['var_tipo']}"
             conteo[k] = conteo.get(k, 0) + it.get("cantidad", 1)
         p["detalle_compact"] = "\n".join(f"{k}: {v}" for k, v in conteo.items())
         p["detalle"] = ", ".join(
             f"{it['cantidad']}x {it['nombre']}"
-            f"{' (' + it['var_cantidad'] + ')' if it.get('var_cantidad') else ''}"
+            f"{' (' + dm.clean_variant_name(it['var_cantidad']) + ')' if it.get('var_cantidad') else ''}"
             f"{' — ' + it['var_tipo'] if it.get('var_tipo') else ''}"
             for it in items
         )
@@ -860,10 +862,10 @@ def create_stock():
         return jsonify({"error": "Producto no encontrado"}), 404
 
     try:
-        cantidad = int(body.get("cantidad_inicial", 0))
+        cantidad = float(body.get("cantidad_inicial", 0))
     except (ValueError, TypeError):
-        cantidad = 0
-    if cantidad <= 0:
+        cantidad = 0.0
+    if cantidad <= 0.0:
         return jsonify({"error": "La cantidad debe ser mayor a 0"}), 400
 
     unidad = body.get("unidad", "unidades")
@@ -903,13 +905,13 @@ def update_stock(sid):
                 item["producto_id"] = pid
                 item["nombre"] = prod["nombre"]
     if "cantidad_inicial" in body:
-        old_init = item.get("cantidad_inicial", 0)
-        new_init = max(1, int(body["cantidad_inicial"]))
+        old_init = float(item.get("cantidad_inicial", 0))
+        new_init = max(0.01, float(body["cantidad_inicial"]))
         item["cantidad_inicial"] = new_init
         diff = new_init - old_init
-        item["cantidad_actual"] = max(0, item.get("cantidad_actual", 0) + diff)
+        item["cantidad_actual"] = max(0.0, float(item.get("cantidad_actual", 0)) + diff)
     if "cantidad_actual" in body:
-        item["cantidad_actual"] = max(0, int(body["cantidad_actual"]))
+        item["cantidad_actual"] = max(0.0, float(body["cantidad_actual"]))
     if "unidad" in body and body["unidad"] in ("unidades", "docenas"):
         item["unidad"] = body["unidad"]
     dm.save_data(data)

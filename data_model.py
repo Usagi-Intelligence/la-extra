@@ -447,6 +447,34 @@ def next_stock_id(data):
     return max((s["id"] for s in data.get("stock", [])), default=0) + 1
 
 
+def clean_variant_name(v):
+    if not v:
+        return ""
+    import re
+    return re.sub(r'\{[^}]+\}', '', v).strip()
+
+
+def get_variant_multiplier(var_cant):
+    if not var_cant:
+        return 1.0
+    import re
+    match = re.search(r'\{([^}]+)\}', var_cant)
+    if match:
+        frac_str = match.group(1).strip()
+        if '/' in frac_str:
+            try:
+                num, denom = frac_str.split('/')
+                return float(num) / float(denom)
+            except Exception:
+                pass
+        else:
+            try:
+                return float(frac_str)
+            except Exception:
+                pass
+    return 1.0
+
+
 def descontar_stock_por_pedido(data, pedido):
     """Subtract stock quantities for each item in a delivered pedido (matched by producto_id)."""
     order_date = pedido.get("fecha", datetime.now().strftime("%d/%m/%Y"))
@@ -456,9 +484,11 @@ def descontar_stock_por_pedido(data, pedido):
         if not pid:
             continue
         qty = item.get("cantidad", 1)
+        multiplier = get_variant_multiplier(item.get("var_cantidad"))
+        dec_qty = float(qty) * multiplier
         for s in stock:
             if s.get("producto_id") == pid and s.get("fecha") == order_date:
-                s["cantidad_actual"] = max(0, s.get("cantidad_actual", 0) - qty)
+                s["cantidad_actual"] = max(0.0, float(s.get("cantidad_actual", 0)) - dec_qty)
 
 
 def devolver_stock_por_pedido(data, pedido):
@@ -470,9 +500,11 @@ def devolver_stock_por_pedido(data, pedido):
         if not pid:
             continue
         qty = item.get("cantidad", 1)
+        multiplier = get_variant_multiplier(item.get("var_cantidad"))
+        dec_qty = float(qty) * multiplier
         for s in stock:
             if s.get("producto_id") == pid and s.get("fecha") == order_date:
-                s["cantidad_actual"] = s.get("cantidad_actual", 0) + qty
+                s["cantidad_actual"] = float(s.get("cantidad_actual", 0)) + dec_qty
 
 
 # ── Gastos helpers ────────────────────────────────────────────────────────────
@@ -559,7 +591,9 @@ def create_pedido(data, cliente, telefono, hora_retiro, items, descuento_pct, pa
     for it in items:
         k = it["nombre"]
         if it.get("var_cantidad"):
-            k += f" ({it['var_cantidad']})"
+            clean_vc = clean_variant_name(it["var_cantidad"])
+            if clean_vc:
+                k += f" ({clean_vc})"
         if it.get("var_tipo"):
             k += f" — {it['var_tipo']}"
         conteo[k] += it["cantidad"]
@@ -577,7 +611,7 @@ def create_pedido(data, cliente, telefono, hora_retiro, items, descuento_pct, pa
         "detalle_compact": "\n".join(f"{k}: {v}" for k, v in conteo.items()),
         "detalle": ", ".join(
             f"{it['cantidad']}x {it['nombre']}"
-            f"{' (' + it['var_cantidad'] + ')' if it.get('var_cantidad') else ''}"
+            f"{' (' + clean_variant_name(it['var_cantidad']) + ')' if it.get('var_cantidad') else ''}"
             f"{' — ' + it['var_tipo'] if it.get('var_tipo') else ''}"
             for it in items
         ),

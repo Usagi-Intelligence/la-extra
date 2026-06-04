@@ -293,7 +293,9 @@ def generar_pdf_diario(fecha_str):
             tipo_name = item.get("tipo", "Otros").capitalize()
             nombre = item.get("nombre", "?")
             if item.get("var_cantidad"):
-                nombre += f" ({item['var_cantidad']})"
+                clean_vc = dm.clean_variant_name(item["var_cantidad"])
+                if clean_vc:
+                    nombre += f" ({clean_vc})"
             if item.get("var_tipo"):
                 nombre += f" · {item['var_tipo']}"
             ventas_por_tipo[tipo_name][nombre] += item.get("cantidad", 1)
@@ -400,7 +402,9 @@ def generar_pdf_diario(fecha_str):
             name = f"{it.get('cantidad', 1)}x {it.get('nombre', '?')}"
             variants = []
             if it.get("var_cantidad"):
-                variants.append(it["var_cantidad"])
+                clean_vc = dm.clean_variant_name(it["var_cantidad"])
+                if clean_vc:
+                    variants.append(clean_vc)
             if it.get("var_tipo"):
                 variants.append(it["var_tipo"])
             if variants:
@@ -583,7 +587,9 @@ def generar_pdf_mensual(mes_str):
             tipo_name = item.get("tipo", "Otros").capitalize()
             nombre = item.get("nombre", "?")
             if item.get("var_cantidad"):
-                nombre += f" ({item['var_cantidad']})"
+                clean_vc = dm.clean_variant_name(item["var_cantidad"])
+                if clean_vc:
+                    nombre += f" ({clean_vc})"
             if item.get("var_tipo"):
                 nombre += f" · {item['var_tipo']}"
             

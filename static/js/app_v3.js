@@ -191,6 +191,68 @@ function fmtElapsed(seconds) {
   return `${sec}s`;
 }
 
+function cleanVariantName(v) {
+  if (!v) return '';
+  return v.replace(/\{[^}]+\}/g, '').trim();
+}
+
+function getVariantMultiplier(varCant) {
+  if (!varCant) return 1.0;
+  const match = varCant.match(/\{([^}]+)\}/);
+  if (match) {
+    const fracStr = match[1].trim();
+    if (fracStr.includes('/')) {
+      const parts = fracStr.split('/');
+      const num = parseFloat(parts[0]);
+      const denom = parseFloat(parts[1]);
+      if (!isNaN(num) && !isNaN(denom) && denom !== 0) {
+        return num / denom;
+      }
+    } else {
+      const val = parseFloat(fracStr);
+      if (!isNaN(val)) return val;
+    }
+  }
+  return 1.0;
+}
+
+function formatStockValue(val) {
+  if (val == null) return '0';
+  const num = parseFloat(val);
+  if (isNaN(num)) return '0';
+  const integerPart = Math.floor(num);
+  const decimalPart = num - integerPart;
+  
+  let fracChar = '';
+  if (Math.abs(decimalPart - 0.5) < 0.01) {
+    fracChar = '½';
+  } else if (Math.abs(decimalPart - 0.25) < 0.01) {
+    fracChar = '¼';
+  } else if (Math.abs(decimalPart - 0.75) < 0.01) {
+    fracChar = '¾';
+  } else if (Math.abs(decimalPart - 0.333) < 0.05) {
+    fracChar = '⅓';
+  } else if (Math.abs(decimalPart - 0.666) < 0.05) {
+    fracChar = '⅔';
+  } else if (Math.abs(decimalPart - 0.125) < 0.01) {
+    fracChar = '⅛';
+  } else if (Math.abs(decimalPart - 0.375) < 0.01) {
+    fracChar = '⅜';
+  } else if (Math.abs(decimalPart - 0.625) < 0.01) {
+    fracChar = '⅝';
+  } else if (Math.abs(decimalPart - 0.875) < 0.01) {
+    fracChar = '⅞';
+  } else if (decimalPart > 0) {
+    return Number(num.toFixed(2)).toString().replace('.', ',');
+  }
+  
+  if (integerPart === 0 && fracChar !== '') {
+    return fracChar;
+  }
+  return integerPart.toString() + fracChar;
+}
+
+
 async function api(path, opts = {}) {
   const url = API + path;
   const res = await fetch(url, {
@@ -338,8 +400,8 @@ function checkLowStock() {
   if (!stockData || !stockData.length) return;
   stockData.forEach(s => {
     if (s.cantidad_inicial <= 0) return;
-    const pct = s.cantidad_actual / s.cantidad_inicial;
-    if (pct <= 0.05 && s.cantidad_actual >= 0 && !_lowStockNotified.has(s.id)) {
+    const threshold = Math.max(0.10 * s.cantidad_inicial, 3);
+    if (s.cantidad_actual <= threshold && s.cantidad_actual >= 0 && !_lowStockNotified.has(s.id)) {
       _lowStockNotified.add(s.id);
       // Find tipo name from the product
       const prod = (catalogoForStock || []).find(p => p.id === s.producto_id);
@@ -354,6 +416,34 @@ function checkLowStock() {
   });
 }
 
+async function checkLowStockBackground() {
+  try {
+    stockData = await api('/stock');
+    if (!catalogoForStock || !catalogoForStock.length) {
+      catalogoForStock = await api('/productos');
+    }
+    if (!stockTipos || !stockTipos.length) {
+      stockTipos = await api('/tipos');
+    }
+    checkLowStock();
+  } catch (e) {
+    console.error("Failed to check low stock in background:", e);
+  }
+}
+
+function getEffectiveStockLimit(productId, stockEntry) {
+  if (!stockEntry) return 0;
+  let limit = stockEntry.cantidad_actual;
+  if (editingOrderId && originalOrderItems.length) {
+    const originalQty = originalOrderItems.reduce((sum, it) => {
+      if (it.producto_id !== productId) return sum;
+      return sum + (it.cantidad * getVariantMultiplier(it.var_cantidad));
+    }, 0);
+    limit += originalQty;
+  }
+  return limit;
+}
+
 function getStockForProduct(productoId) {
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, '0');
@@ -365,7 +455,10 @@ function getStockForProduct(productoId) {
 }
 
 function getOrderQtyForProduct(productoId) {
-  return orderItems.reduce((sum, it) => it.producto_id === productoId ? sum + it.cantidad : sum, 0);
+  return orderItems.reduce((sum, it) => {
+    if (it.producto_id !== productoId) return sum;
+    return sum + (it.cantidad * getVariantMultiplier(it.var_cantidad));
+  }, 0);
 }
 
 let _stockWarningIgnoreCallback = null;
@@ -495,6 +588,7 @@ async function loadPedidos() {
     if (document.body.classList.contains('layout-vertical')) {
       updateSidebarTelemetry();
     }
+    checkLowStockBackground();
   } catch (e) {
     toast('SYS ERROR: ' + e.message, 'error');
   }
@@ -678,7 +772,7 @@ function showPedidoDetails(pedidoId) {
         <ul style="list-style: none; padding: 0; margin: 0; font-family: var(--font-mono) !important; font-size: 0.88rem; color: var(--text-dark); line-height: 1.5;">
           ${groups[catName].map(it => {
             const coccion = it.var_tipo ? ` - ${it.var_tipo}` : '';
-            const tamano = it.var_cantidad ? ` (${it.var_cantidad})` : '';
+            const tamano = it.var_cantidad ? ` (${cleanVariantName(it.var_cantidad)})` : '';
             return `<li style="display: flex; justify-content: space-between; margin-bottom: 4px; padding: 2px 0; font-family: var(--font-mono) !important;">
               <span style="font-family: var(--font-mono) !important;"><span style="color: var(--accent); font-weight: 700; margin-right: 6px; font-family: var(--font-mono) !important;">${it.cantidad}x</span><strong style="font-weight: 600; color: var(--text-dark); font-family: var(--font-mono) !important;">${it.nombre}</strong>${coccion}${tamano}</span>
               <span style="color: var(--text-light); font-weight: 700; font-family: var(--font-mono) !important;">${fmtMoney(it.precio * it.cantidad)}</span>
@@ -882,6 +976,7 @@ function addMinutesToRetiro(mins) {
 }
 
 let editingOrderId = null;
+let originalOrderItems = [];
 let promoItems = [];
 let currentPromoProduct = null;
 let currentPromoQty = 1;
@@ -930,11 +1025,13 @@ async function openPedidoModal(orderId = null) {
     onEnvioTipoChange();
     toggleEnvio();
     orderItems = JSON.parse(JSON.stringify(orderData.items || []));
+    originalOrderItems = JSON.parse(JSON.stringify(orderData.items || []));
     $('#ped-variant-area').style.display = 'none';
     $('#pedido-modal-title').textContent = '// EDITAR PEDIDO #' + orderId;
     $('#ped-submit-btn').textContent = 'GUARDAR CAMBIOS';
   } else {
     editingOrderId = null;
+    originalOrderItems = [];
     $('#ped-delete-btn').style.display = 'none';
     $('#ped-cliente').value = '';
     $('#ped-telefono').value = '';
@@ -979,6 +1076,8 @@ function closePedidoModal() {
   $('#ped-search-results').classList.remove('visible');
   closeChatPopup();
   pinnedChatForOrder = null;
+  editingOrderId = null;
+  originalOrderItems = [];
 }
 
 function deletePedidoFromModal() {
@@ -1157,8 +1256,9 @@ async function selectProduct(product, tipo) {
       if (stockEntry) {
         const alreadyOrdered = getOrderQtyForProduct(product.id);
         const totalNeeded = alreadyOrdered + finalQty;
-        if (totalNeeded > stockEntry.cantidad_actual) {
-          const faltante = totalNeeded - stockEntry.cantidad_actual;
+        const limit = getEffectiveStockLimit(product.id, stockEntry);
+        if (totalNeeded > limit) {
+          const faltante = totalNeeded - limit;
           showStockWarning(faltante, product.nombre, () => {
             orderItems.push(newItem);
             renderOrderItems(); updateOrderTotals();
@@ -1757,10 +1857,11 @@ function showVariantSelector(product, tipo, vars, qty = 1) {
 
 function renderVariantPills(group, values) {
   const containerId = group === 'tipo' ? 'ped-variant-tipo-pills' : 'ped-variant-cant-pills';
-  $(`#${containerId}`).innerHTML = values.map(v =>
-    `<div class="variant-pill" tabindex="-1" role="button"
-       onclick="onVariantPillClick('${group}', this, '${v}')">${v}</div>`
-  ).join('');
+  $(`#${containerId}`).innerHTML = values.map(v => {
+    const displayName = group === 'cant' ? cleanVariantName(v) : v;
+    return `<div class="variant-pill" tabindex="-1" role="button"
+       onclick="onVariantPillClick('${group}', this, '${v}')">${displayName}</div>`;
+  }).join('');
 }
 
 function updateVariantStepUI() {
@@ -1985,10 +2086,11 @@ function addItemToOrder() {
   const stockEntry = getStockForProduct(product.id);
   if (stockEntry) {
     const alreadyOrdered = getOrderQtyForProduct(product.id);
-    const totalNeeded = alreadyOrdered + qty;
-    if (totalNeeded > stockEntry.cantidad_actual) {
-      const faltante = totalNeeded - stockEntry.cantidad_actual;
-      showStockWarning(faltante, product.nombre, () => {
+    const totalNeeded = alreadyOrdered + (qty * getVariantMultiplier(selectedVariantCant));
+    const limit = getEffectiveStockLimit(product.id, stockEntry);
+    if (totalNeeded > limit) {
+      const faltante = totalNeeded - limit;
+      showStockWarning(formatStockValue(faltante), product.nombre, () => {
         orderItems.push(newItem);
         $('#ped-variant-area').style.display = 'none';
         variantStep = null;
@@ -2024,7 +2126,7 @@ function renderOrderItems() {
     return;
   }
   list.innerHTML = orderItems.map((it, i) => {
-    const variant = [it.var_tipo, it.var_cantidad].filter(Boolean).join(' · ');
+    const variant = [it.var_tipo, cleanVariantName(it.var_cantidad)].filter(Boolean).join(' · ');
     return `
       <li class="order-item">
         <span class="oi-qty">${it.cantidad}x</span>
@@ -2054,10 +2156,11 @@ function changeItemQty(index, delta) {
     const stockEntry = getStockForProduct(item.producto_id);
     if (stockEntry) {
       const alreadyOrdered = getOrderQtyForProduct(item.producto_id);
-      const totalNeeded = alreadyOrdered + delta;
-      if (totalNeeded > stockEntry.cantidad_actual) {
-        const faltante = totalNeeded - stockEntry.cantidad_actual;
-        showStockWarning(faltante, item.nombre, () => {
+      const totalNeeded = alreadyOrdered + (delta * getVariantMultiplier(item.var_cantidad));
+      const limit = getEffectiveStockLimit(item.producto_id, stockEntry);
+      if (totalNeeded > limit) {
+        const faltante = totalNeeded - limit;
+        showStockWarning(formatStockValue(faltante), item.nombre, () => {
           orderItems[index].cantidad = newQty;
           renderOrderItems(); updateOrderTotals();
         }, () => { /* Deshacer: don't change qty */ });
@@ -2828,7 +2931,7 @@ function renderPromoItems() {
 
     const qtyVarSelect = hasQtyVariants 
       ? `<select onchange="promoItems[${index}].var_cantidad = this.value" style="background:var(--bg-white); border: 1px solid var(--bg-cool-gray); border-radius: var(--radius);">
-          ${tipo.variantes_cantidad.map(vc => `<option value="${vc}" ${it.var_cantidad === vc ? 'selected' : ''}>${vc}</option>`).join('')}
+          ${tipo.variantes_cantidad.map(vc => `<option value="${vc}" ${it.var_cantidad === vc ? 'selected' : ''}>${cleanVariantName(vc)}</option>`).join('')}
          </select>`
       : `<span style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">—</span>`;
 
@@ -3659,7 +3762,7 @@ function renderStock() {
         </div>
         <div class="pc-bottom">
           <span style="font-family:var(--font-head); font-weight:700; font-size:1rem; color:${barColor};">
-            ${s.cantidad_actual} / ${s.cantidad_inicial} ${s.unidad}
+            ${formatStockValue(s.cantidad_actual)} / ${formatStockValue(s.cantidad_inicial)} ${s.unidad}
           </span>
           <div class="pc-actions">
             <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${s.id})">✎ AJUSTAR</button>
@@ -3764,11 +3867,11 @@ function closeStockModal() { $('#modal-stock').classList.remove('open'); }
 
 async function submitStock() {
   const producto_id = parseInt($('#stock-producto-id').value, 10) || null;
-  const cantidadRaw    = parseInt($('#stock-cantidad').value, 10);
+  const cantidadRaw    = parseFloat($('#stock-cantidad').value);
   const unidadRaw      = $('#stock-unidad').value;
 
   if (!producto_id) { toast('Seleccioná un producto', 'error'); return; }
-  if (!cantidadRaw || cantidadRaw < 1) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
+  if (isNaN(cantidadRaw) || cantidadRaw <= 0) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
 
   let cantidad = cantidadRaw;
   let unidad = 'unidades';
@@ -3797,7 +3900,7 @@ function openStockAjuste(sid) {
   const item = stockData.find(s => s.id === sid);
   if (!item) return;
   $('#ajuste-item-nombre').textContent =
-    `${item.nombre} — quedan: ${item.cantidad_actual} de ${item.cantidad_inicial} ${item.unidad}`;
+    `${item.nombre} — quedan: ${formatStockValue(item.cantidad_actual)} de ${formatStockValue(item.cantidad_inicial)} ${item.unidad}`;
   $('#ajuste-operacion').value = 'agregar';
   $('#ajuste-cantidad').value = ''; // Blank by default for immediate typing
   $('#modal-stock-ajuste').classList.add('open');
@@ -3808,7 +3911,7 @@ function closeStockAjuste() { $('#modal-stock-ajuste').classList.remove('open');
 
 async function submitAjuste() {
   const op = $('#ajuste-operacion').value;
-  const qty = parseInt($('#ajuste-cantidad').value, 10);
+  const qty = parseFloat($('#ajuste-cantidad').value);
   if (isNaN(qty) || qty < 0) { toast('Cantidad inválida', 'error'); return; }
   const item = stockData.find(s => s.id === ajusteStockId);
   if (!item) return;
