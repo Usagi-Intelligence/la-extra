@@ -1,55 +1,43 @@
 # 🫓 Sistema de Empanadas
-
-App de escritorio para gestionar pedidos de empanadas. Interfaz moderna, datos guardados localmente en `data.json`.
+App de escritorio para gestionar pedidos de empanadas. Datos guardados localmente en `data.json`.
 
 ---
 
-## ▶ Cómo ejecutar (modo desarrollo)
+## ▶ Cómo ejecutar
 
-### 1. Instalar dependencias de Python
-Necesitás Python 3.9 o superior instalado. Luego abrí una terminal en esta carpeta y ejecutá:
-
+### 1. Python
+Requiere Python 3.9+.
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Instalar dependencias de WhatsApp (Node.js)
-El sistema usa un servicio local de WhatsApp basado en **Baileys** para evitar usar Docker. Necesitás tener instalado **Node.js** en tu PC.
-Abrí una terminal en la carpeta `whatsapp-service/` y ejecutá:
+### 2. WhatsApp (Node.js)
+Requiere Node.js instalado. Durante la instalación, asegurate de tildar **"Add to PATH"**. Si ya lo instalaste sin esa opción, agregalo manualmente: buscá **"Variables de entorno"** en el menú inicio → editá la variable `Path` del usuario → agregá `C:\Program Files\nodejs`.
 
 ```bash
 cd whatsapp-service
 npm install
 ```
 
-### 3. Correr la app
-Ejecutá la app de Python:
+### 3. Correr
 ```bash
 python app_v3.py
 ```
-*(La app de Python levantará automáticamente el servicio de WhatsApp en segundo plano en el puerto 8080)*
+*(Levanta automáticamente el servicio de WhatsApp en el puerto 8080)*
 
 ---
 
-## 📦 Cómo generar el .exe para Windows
+## 📦 Generar .exe
 
-### 1. Instalar PyInstaller
 ```bash
 pip install pyinstaller
-```
-
-### 2. Generar el ejecutable
-```bash
 pyinstaller --noconfirm --onefile --windowed --name "SistemaEmpanadas" app_v3.py
 ```
-
-El `.exe` va a aparecer en la carpeta `dist/`.
+El ejecutable queda en `dist/`.
 
 ---
 
 ## 💡 Tips
-
-- Los datos se guardan automáticamente en `data.json` (misma carpeta que el programa).
-- Para hacer backup: copiá el archivo `data.json`.
-- Para empezar de cero: borrá el `data.json`.
-- Si querés cambiar los precios sin abrir la app, podés editar `data.json` con el Bloc de notas.
+- Backup: copiá `data.json`.
+- Resetear datos: borrá `data.json`.
+- Editar precios sin abrir la app: modificá `data.json` con el Bloc de notas.
