@@ -14,6 +14,11 @@ pip install -r requirements.txt
 ### 2. WhatsApp (Node.js)
 Requiere Node.js instalado. Durante la instalación, asegurate de tildar **"Add to PATH"**. Si ya lo instalaste sin esa opción, agregalo manualmente: buscá **"Variables de entorno"** en el menú inicio → editá la variable `Path` del usuario → agregá `C:\Program Files\nodejs`.
 
+Si al correr `npm install` PowerShell dice que la ejecución de scripts está deshabilitada, ejecutá esto una sola vez:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
 ```bash
 cd whatsapp-service
 npm install
