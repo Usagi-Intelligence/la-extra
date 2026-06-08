@@ -70,7 +70,7 @@ const SFX = {
         osc.frequency.setValueAtTime(587.33, t); // D5
         osc.frequency.setValueAtTime(880, t + 0.1); // A5
         
-        gain.gain.setValueAtTime(0.08, t);
+        gain.gain.setValueAtTime(0.45, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
         
         osc.start(t);
@@ -431,12 +431,24 @@ async function checkLowStockBackground() {
   }
 }
 
+function isProductStockSeparated(productId) {
+  const prod = (catalogoForStock || []).find(p => p.id === productId);
+  if (!prod) return false;
+  const list = (typeof stockTipos !== 'undefined' && stockTipos && stockTipos.length) ? stockTipos : ((typeof tiposData !== 'undefined') ? tiposData : []);
+  const tipo = list.find(t => t.id === prod.tipo_id);
+  return !!(tipo && tipo.separar_stock_coccion);
+}
+
 function getEffectiveStockLimit(productId, stockEntry) {
   if (!stockEntry) return 0;
   let limit = stockEntry.cantidad_actual;
+  const varTipo = stockEntry.var_tipo || '';
   if (editingOrderId && originalOrderItems.length) {
     const originalQty = originalOrderItems.reduce((sum, it) => {
       if (it.producto_id !== productId) return sum;
+      if (isProductStockSeparated(productId)) {
+        if ((it.var_tipo || '') !== varTipo) return sum;
+      }
       return sum + (it.cantidad * getVariantMultiplier(it.var_cantidad));
     }, 0);
     limit += originalQty;
@@ -444,19 +456,28 @@ function getEffectiveStockLimit(productId, stockEntry) {
   return limit;
 }
 
-function getStockForProduct(productoId) {
+function getStockForProduct(productoId, varTipo = '') {
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, '0');
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const yyyy = today.getFullYear();
   const fechaHoy = `${dd}/${mm}/${yyyy}`;
   if (!stockData || !stockData.length) return null;
-  return stockData.find(s => s.producto_id === productoId && s.fecha === fechaHoy) || null;
+  
+  // Try matching product, date, and specific var_tipo
+  const matched = stockData.find(s => s.producto_id === productoId && s.fecha === fechaHoy && (s.var_tipo || '') === varTipo);
+  if (matched) return matched;
+  
+  // Fallback to general stock entry if specific not found
+  return stockData.find(s => s.producto_id === productoId && s.fecha === fechaHoy && (s.var_tipo || '') === '') || null;
 }
 
-function getOrderQtyForProduct(productoId) {
+function getOrderQtyForProduct(productoId, varTipo = '') {
   return orderItems.reduce((sum, it) => {
     if (it.producto_id !== productoId) return sum;
+    if (isProductStockSeparated(productoId)) {
+      if ((it.var_tipo || '') !== varTipo) return sum;
+    }
     return sum + (it.cantidad * getVariantMultiplier(it.var_cantidad));
   }, 0);
 }
@@ -2083,9 +2104,9 @@ function addItemToOrder() {
     precio: price, cantidad: qty, descuento_efectivo: product.excluir_descuento_efectivo ? false : (tipo ? tipo.descuento_efectivo : false)
   };
 
-  const stockEntry = getStockForProduct(product.id);
+  const stockEntry = getStockForProduct(product.id, selectedVariantTipo);
   if (stockEntry) {
-    const alreadyOrdered = getOrderQtyForProduct(product.id);
+    const alreadyOrdered = getOrderQtyForProduct(product.id, selectedVariantTipo);
     const totalNeeded = alreadyOrdered + (qty * getVariantMultiplier(selectedVariantCant));
     const limit = getEffectiveStockLimit(product.id, stockEntry);
     if (totalNeeded > limit) {
@@ -2153,9 +2174,9 @@ function changeItemQty(index, delta) {
   // Check stock only when increasing
   if (delta > 0) {
     const item = orderItems[index];
-    const stockEntry = getStockForProduct(item.producto_id);
+    const stockEntry = getStockForProduct(item.producto_id, item.var_tipo);
     if (stockEntry) {
-      const alreadyOrdered = getOrderQtyForProduct(item.producto_id);
+      const alreadyOrdered = getOrderQtyForProduct(item.producto_id, item.var_tipo);
       const totalNeeded = alreadyOrdered + (delta * getVariantMultiplier(item.var_cantidad));
       const limit = getEffectiveStockLimit(item.producto_id, stockEntry);
       if (totalNeeded > limit) {
@@ -2715,6 +2736,7 @@ function openProductoModal(product = null) {
   const tipoId = product ? product.tipo_id : null;
   const precioLabel = $('#prod-precio-label');
   const precioGroup = $('#prod-precio-group');
+  const tipo = product ? (tiposData || []).find(t => t.id === tipoId) : null;
 
   if (tipoId === null) {
     $('#prod-promo-area').style.display = 'none';
@@ -2849,6 +2871,8 @@ $('#prod-tipo').addEventListener('change', function() {
     return;
   }
   const tipoId = parseInt(val);
+  const tipo = (tiposData || []).find(t => t.id === tipoId);
+
   if (tipoId === 999) {
     $('#prod-promo-area').style.display = 'block';
     $('#prod-variantes-area').style.display = 'none';
@@ -3096,6 +3120,7 @@ function selectTipo(id) {
     <div style="display:flex; flex-direction:column; gap:5px; font-size:0.82rem; margin-bottom:14px; font-family:var(--font-mono);">
       <div>Opciones de Cocción: <span style="color:${tipo.admite_variantes_tipo ? 'var(--success)' : 'var(--accent-red)'};">${tipo.admite_variantes_tipo ? 'SÍ' : 'NO'}</span></div>
       <div>Opciones de Tamaño: <span style="color:${tipo.admite_variantes_cantidad ? 'var(--success)' : 'var(--accent-red)'};">${tipo.admite_variantes_cantidad ? 'SÍ' : 'NO'}</span></div>
+      <div>Separar Stock por Cocción: <span style="color:${tipo.separar_stock_coccion ? 'var(--success)' : 'var(--accent-red)'};">${tipo.separar_stock_coccion ? 'SÍ' : 'NO'}</span></div>
       <div>Descuento Efectivo: <span style="color:${tipo.descuento_efectivo ? 'var(--success)' : 'var(--accent-red)'};">${tipo.descuento_efectivo ? 'SÍ' : 'NO'}</span></div>
     </div>
     ${tipo.admite_variantes_tipo && tipo.variantes_tipo && tipo.variantes_tipo.length ? `<div style="margin-bottom:10px;"><label>Opciones de Cocción</label><div class="variant-pills">${tipo.variantes_tipo.map(v => `<span class="variant-pill" style="cursor:default;">${v}</span>`).join('')}</div></div>` : ''}
@@ -3113,6 +3138,7 @@ function openTipoModal(tipo = null) {
   $('#tipo-nombre').value = tipo ? tipo.nombre : '';
   $('#tipo-var-tipo').checked = tipo ? tipo.admite_variantes_tipo : false;
   $('#tipo-var-cant').checked = tipo ? tipo.admite_variantes_cantidad : false;
+  $('#tipo-separar-stock-coccion').checked = tipo ? !!tipo.separar_stock_coccion : false;
   $('#tipo-desc-efectivo').checked = tipo ? tipo.descuento_efectivo : true;
   $('#tipo-vt-list').value = tipo && tipo.variantes_tipo ? tipo.variantes_tipo.join('\n') : '';
   $('#tipo-vc-list').value = tipo && tipo.variantes_cantidad ? tipo.variantes_cantidad.join('\n') : '';
@@ -3123,8 +3149,16 @@ function openTipoModal(tipo = null) {
 function closeTipoModal() { $('#modal-tipo').classList.remove('open'); }
 
 function updateTipoModalAreas() {
-  $('#tipo-vt-area').style.display = $('#tipo-var-tipo').checked ? 'block' : 'none';
+  const admiteCoccion = $('#tipo-var-tipo').checked;
+  $('#tipo-vt-area').style.display = admiteCoccion ? 'block' : 'none';
   $('#tipo-vc-area').style.display = $('#tipo-var-cant').checked ? 'block' : 'none';
+  const sepGroup = $('#tipo-separar-stock-group');
+  if (sepGroup) {
+    sepGroup.style.display = admiteCoccion ? 'block' : 'none';
+    if (!admiteCoccion) {
+      $('#tipo-separar-stock-coccion').checked = false;
+    }
+  }
 }
 $('#tipo-var-tipo').addEventListener('change', updateTipoModalAreas);
 $('#tipo-var-cant').addEventListener('change', updateTipoModalAreas);
@@ -3157,6 +3191,7 @@ async function submitTipo() {
   const body = {
     nombre, admite_variantes_tipo: $('#tipo-var-tipo').checked,
     admite_variantes_cantidad: $('#tipo-var-cant').checked, descuento_efectivo: $('#tipo-desc-efectivo').checked,
+    separar_stock_coccion: $('#tipo-separar-stock-coccion').checked,
     variantes_tipo: $('#tipo-vt-list').value.split('\n').map(s => s.trim()).filter(Boolean),
     variantes_cantidad: $('#tipo-vc-list').value.split('\n').map(s => s.trim()).filter(Boolean),
   };
@@ -3358,8 +3393,129 @@ async function loadSistema() {
         </div>
       `;
     }
+    await loadUpdatesInfo();
   } catch (e) { toast('ERROR: ' + e.message, 'error'); }
 }
+
+async function loadUpdatesInfo() {
+  try {
+    const info = await api('/updates/info');
+    const versionEl = $('#lbl-update-current-version');
+    const ownerEl = $('#lbl-update-owner');
+    const repoEl = $('#lbl-update-repo');
+    if (versionEl) versionEl.textContent = 'v' + info.current_version;
+    if (ownerEl) ownerEl.textContent = info.github_owner || 'No configurado';
+    if (repoEl) repoEl.textContent = info.github_repo || 'No configurado';
+  } catch (e) {
+    console.error('Error al cargar info de updates:', e);
+  }
+}
+
+async function checkForUpdates() {
+  const statusEl = $('#update-status');
+  const btnRun = $('#btn-run-update');
+  if (statusEl) {
+    statusEl.textContent = 'Buscando actualizaciones...';
+    statusEl.style.color = 'var(--text-dark)';
+  }
+  if (btnRun) btnRun.disabled = true;
+  
+  try {
+    const res = await api('/updates/check', { method: 'POST' });
+    if (statusEl) {
+      if (res.has_update) {
+        statusEl.innerHTML = `¡Nueva versión disponible: <strong style="color:var(--success);">v${res.latest_version}</strong>!`;
+        statusEl.style.color = 'var(--success)';
+        if (btnRun) btnRun.disabled = false;
+      } else {
+        statusEl.textContent = `Sistema al día (v${res.current_version})`;
+        statusEl.style.color = 'var(--text-muted)';
+      }
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = 'Error: ' + e.message;
+      statusEl.style.color = 'var(--accent-red)';
+    }
+    toast('ERROR AL BUSCAR ACTUALIZACIÓN: ' + e.message, 'error');
+  }
+}
+
+async function runUpdate() {
+  showConfirm('Instalar Actualización', 'El sistema se descargará, instalará y reiniciará automáticamente. ¿Continuar?', async () => {
+    const statusEl = $('#update-status');
+    const btnRun = $('#btn-run-update');
+    if (statusEl) {
+      statusEl.textContent = 'Descargando e instalando...';
+      statusEl.style.color = 'var(--accent)';
+    }
+    if (btnRun) btnRun.disabled = true;
+    
+    try {
+      toast('DESCARGANDO ACTUALIZACIÓN...', 'success');
+      const res = await api('/updates/install', { method: 'POST' });
+      if (res.success) {
+        toast('ACTUALIZACIÓN COMPLETADA. REINICIANDO...', 'success');
+      } else {
+        toast('ERROR AL ACTUALIZAR: ' + res.details, 'error');
+        if (statusEl) {
+          statusEl.textContent = 'Error: ' + res.details;
+          statusEl.style.color = 'var(--accent-red)';
+        }
+      }
+    } catch (e) {
+      toast('ERROR AL ACTUALIZAR: ' + e.message, 'error');
+      if (statusEl) {
+        statusEl.textContent = 'Error: ' + e.message;
+        statusEl.style.color = 'var(--accent-red)';
+      }
+    }
+  });
+}
+
+function openUpdateConfigModal() {
+  const ownerEl = $('#lbl-update-owner');
+  const repoEl = $('#lbl-update-repo');
+  const owner = ownerEl ? ownerEl.textContent : '';
+  const repo = repoEl ? repoEl.textContent : '';
+  $('#update-cfg-owner').value = owner === 'No configurado' ? '' : owner;
+  $('#update-cfg-repo').value = repo === 'No configurado' ? '' : repo;
+  $('#update-cfg-password').value = '';
+  $('#modal-update-config').classList.add('open');
+}
+
+function closeUpdateConfigModal() {
+  $('#modal-update-config').classList.remove('open');
+}
+
+async function submitUpdateConfig() {
+  const owner = $('#update-cfg-owner').value.trim();
+  const repo = $('#update-cfg-repo').value.trim();
+  const password = $('#update-cfg-password').value;
+  
+  if (!owner || !repo) {
+    toast('DUEÑO Y REPOSITORIO REQUERIDOS', 'error');
+    return;
+  }
+  if (!password) {
+    toast('CONTRASEÑA REQUERIDA', 'error');
+    return;
+  }
+  
+  try {
+    await api('/updates/config', {
+      method: 'POST',
+      body: JSON.stringify({ github_owner: owner, github_repo: repo, password: password })
+    });
+    
+    toast('CONFIGURACIÓN GUARDADA', 'success');
+    closeUpdateConfigModal();
+    await loadUpdatesInfo();
+  } catch (e) {
+    toast('ERROR: ' + e.message, 'error');
+  }
+}
+
 
 async function saveConfig() {
   try {
@@ -3753,39 +3909,120 @@ function renderStock() {
     });
   }
 
-  container.innerHTML = displayData.map(s => {
-    const prod       = catalogoForStock.find(p => p.id === s.producto_id);
-    const isInactive = prod && prod.sin_stock;
+  // Group items by product ID if category stock separation is enabled
+  const grouped = {};
+  displayData.forEach(s => {
+    const prod = catalogoForStock.find(p => p.id === s.producto_id);
+    const separate = prod && isProductStockSeparated(s.producto_id);
+    if (separate) {
+      if (!grouped[s.producto_id]) {
+        grouped[s.producto_id] = {
+          isGrouped: true,
+          product: prod,
+          items: []
+        };
+      }
+      grouped[s.producto_id].items.push(s);
+    } else {
+      const uniqueKey = 'single_' + s.id;
+      grouped[uniqueKey] = {
+        isGrouped: false,
+        product: prod,
+        item: s
+      };
+    }
+  });
 
-    const pct        = s.cantidad_inicial > 0 ? s.cantidad_actual / s.cantidad_inicial : 0;
-    const pctDisplay = Math.max(0, Math.min(100, Math.round(pct * 100)));
-    const barColor   = isInactive ? 'var(--text-light)' : (pct > 0.66 ? 'var(--success)' : pct > 0.33 ? '#f39c12' : pct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
-    const estadoTag  = isInactive
-      ? `<span class="pc-estado" style="color:var(--text-light); border-color:var(--text-light); background:rgba(0,0,0,0.04);">INACTIVO</span>`
-      : (s.cantidad_actual === 0
-          ? `<span class="pc-estado" style="color:var(--accent-red); border-color:var(--accent-red); background:rgba(231,76,60,0.06);">AGOTADO</span>`
-          : `<span class="pc-estado" style="color:${barColor}; border-color:${barColor}; background:transparent; font-family:var(--font-mono);">${pctDisplay}%</span>`);
-    return `
-      <div class="stock-card" style="border-left-color:${barColor}; ${isInactive ? 'opacity:0.65;' : ''}">
-        <div class="pc-top">
-          <span class="pc-cliente" style="${isInactive ? 'color:var(--text-light);' : ''}">${s.nombre}</span>
-          ${estadoTag}
-        </div>
-        <div style="margin:6px 0 8px;">
-          <div style="height:8px; background:var(--bg-off-white); border:1px solid var(--bg-cool-gray); border-radius:6px; overflow:hidden;">
-            <div style="height:100%; width:${pctDisplay}%; background:${barColor}; border-radius:6px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1);"></div>
+  container.innerHTML = Object.values(grouped).map(g => {
+    if (g.isGrouped) {
+      const prod = g.product;
+      const isInactive = prod && prod.sin_stock;
+      
+      const totalInicial = g.items.reduce((sum, item) => sum + parseFloat(item.cantidad_inicial || 0), 0);
+      const totalActual = g.items.reduce((sum, item) => sum + parseFloat(item.cantidad_actual || 0), 0);
+      
+      const pct = totalInicial > 0 ? totalActual / totalInicial : 0;
+      const pctDisplay = Math.max(0, Math.min(100, Math.round(pct * 100)));
+      const barColor = isInactive ? 'var(--text-light)' : (pct > 0.66 ? 'var(--success)' : pct > 0.33 ? '#f39c12' : pct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
+      
+      const estadoTag = isInactive
+        ? `<span class="pc-estado" style="color:var(--text-light); border-color:var(--text-light); background:rgba(0,0,0,0.04);">INACTIVO</span>`
+        : (totalActual === 0
+            ? `<span class="pc-estado" style="color:var(--accent-red); border-color:var(--accent-red); background:rgba(231,76,60,0.06);">AGOTADO</span>`
+            : `<span class="pc-estado" style="color:${barColor}; border-color:${barColor}; background:transparent; font-family:var(--font-mono);">${pctDisplay}%</span>`);
+            
+      const itemsHtml = g.items.map(item => {
+        const itemPct = item.cantidad_inicial > 0 ? item.cantidad_actual / item.cantidad_inicial : 0;
+        const itemPctDisplay = Math.max(0, Math.min(100, Math.round(itemPct * 100)));
+        const itemBarColor = isInactive ? 'var(--text-light)' : (itemPct > 0.66 ? 'var(--success)' : itemPct > 0.33 ? '#f39c12' : itemPct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
+        
+        return `
+          <div style="margin-top: 10px; border-top: 1px dashed var(--bg-cool-gray); padding-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span class="variant-pill" style="display: inline-block; font-size: 0.72rem; padding: 2px 6px; cursor: default; background: rgba(0,0,0,0.02); color: var(--text-light); border-color: var(--bg-cool-gray); pointer-events: none; border-radius: 4px; font-family: var(--font-mono);">${item.var_tipo || 'General'}</span>
+            </div>
+            <div style="margin: 4px 0 6px;">
+              <div style="height: 8px; background: var(--bg-off-white); border: 1px solid var(--bg-cool-gray); border-radius: 6px; overflow: hidden;">
+                <div style="height: 100%; width: ${itemPctDisplay}%; background: ${itemBarColor}; border-radius: 6px; transition: width 0.5s cubic-bezier(0.4,0,0.2,1);"></div>
+              </div>
+            </div>
+            <div class="pc-bottom" style="margin-top: 0; padding-top: 2px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-family: var(--font-head); font-weight: 700; font-size: 0.9rem; color: ${itemBarColor};">
+                ${formatStockValue(item.cantidad_actual)} / ${formatStockValue(item.cantidad_inicial)} ${item.unidad}
+              </span>
+              <div class="pc-actions">
+                <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${item.id})">✎ AJUSTAR</button>
+                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteStockItem(${item.id})">✕</button>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="pc-bottom">
-          <span style="font-family:var(--font-head); font-weight:700; font-size:1rem; color:${barColor};">
-            ${formatStockValue(s.cantidad_actual)} / ${formatStockValue(s.cantidad_inicial)} ${s.unidad}
-          </span>
-          <div class="pc-actions">
-            <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${s.id})">✎ AJUSTAR</button>
-            <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteStockItem(${s.id})">✕</button>
+        `;
+      }).join('');
+
+      return `
+        <div class="stock-card" style="${isInactive ? 'opacity:0.65;' : ''}">
+          <div class="pc-top" style="margin-bottom: 4px;">
+            <span class="pc-cliente" style="${isInactive ? 'color:var(--text-light);' : ''}">${prod ? prod.nombre : ''} <span style="font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-light); font-weight: normal; margin-left: 6px;">[${formatStockValue(totalActual)}/${formatStockValue(totalInicial)}]</span></span>
+            ${estadoTag}
           </div>
+          ${itemsHtml}
         </div>
-      </div>`;
+      `;
+    } else {
+      const s = g.item;
+      const prod = g.product;
+      const isInactive = prod && prod.sin_stock;
+
+      const pct = s.cantidad_inicial > 0 ? s.cantidad_actual / s.cantidad_inicial : 0;
+      const pctDisplay = Math.max(0, Math.min(100, Math.round(pct * 100)));
+      const barColor = isInactive ? 'var(--text-light)' : (pct > 0.66 ? 'var(--success)' : pct > 0.33 ? '#f39c12' : pct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
+      const estadoTag = isInactive
+        ? `<span class="pc-estado" style="color:var(--text-light); border-color:var(--text-light); background:rgba(0,0,0,0.04);">INACTIVO</span>`
+        : (s.cantidad_actual === 0
+            ? `<span class="pc-estado" style="color:var(--accent-red); border-color:var(--accent-red); background:rgba(231,76,60,0.06);">AGOTADO</span>`
+            : `<span class="pc-estado" style="color:${barColor}; border-color:${barColor}; background:transparent; font-family:var(--font-mono);">${pctDisplay}%</span>`);
+      return `
+        <div class="stock-card" style="${isInactive ? 'opacity:0.65;' : ''}">
+          <div class="pc-top">
+            <span class="pc-cliente" style="${isInactive ? 'color:var(--text-light);' : ''}">${s.nombre}</span>
+            ${estadoTag}
+          </div>
+          <div style="margin:6px 0 8px;">
+            <div style="height:8px; background:var(--bg-off-white); border:1px solid var(--bg-cool-gray); border-radius:6px; overflow:hidden;">
+              <div style="height:100%; width:${pctDisplay}%; background:${barColor}; border-radius:6px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1);"></div>
+            </div>
+          </div>
+          <div class="pc-bottom">
+            <span style="font-family:var(--font-head); font-weight:700; font-size:1rem; color:${barColor};">
+              ${formatStockValue(s.cantidad_actual)} / ${formatStockValue(s.cantidad_inicial)} ${s.unidad}
+            </span>
+            <div class="pc-actions">
+              <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${s.id})">✎ AJUSTAR</button>
+              <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteStockItem(${s.id})">✕</button>
+            </div>
+          </div>
+        </div>`;
+    }
   }).join('');
 }
 
@@ -3810,6 +4047,9 @@ async function openStockModal(sid = null) {
         .join('');
   }
 
+  const qtyGroup = $('#stock-cantidad-group');
+  if (qtyGroup) qtyGroup.style.display = 'block';
+
   if (sid) {
     const item = stockData.find(s => s.id === sid);
     if (!item) return;
@@ -3828,6 +4068,12 @@ async function openStockModal(sid = null) {
     $('#stock-producto-id').value = item.producto_id || '';
     $('#stock-cantidad').value = item.cantidad_inicial;
     $('#stock-unidad').value   = item.unidad || 'unidades';
+
+    // Hide cooking checkboxes when editing single stock entry
+    const coccionGroup = $('#stock-coccion-group');
+    const coccionContainer = $('#stock-coccion-checkboxes');
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
   } else {
     $('#stock-modal-title').textContent = '// CARGAR STOCK';
     $('#stock-submit-btn').textContent  = 'AGREGAR';
@@ -3839,6 +4085,12 @@ async function openStockModal(sid = null) {
     $('#stock-producto-id').value = '';
     $('#stock-cantidad').value = 1;
     $('#stock-unidad').value   = 'unidades';
+
+    // Hide cooking checkboxes on open
+    const coccionGroup = $('#stock-coccion-group');
+    const coccionContainer = $('#stock-coccion-checkboxes');
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
   }
   $('#modal-stock').classList.add('open');
   if (catSel) {
@@ -3846,6 +4098,73 @@ async function openStockModal(sid = null) {
   } else {
     setTimeout(() => $('#stock-producto-id').focus(), 80);
   }
+}
+
+function isProductFullyAdded(p) {
+  const existingEntries = stockData.filter(s => s.producto_id === p.id && (!editingStockId || s.id !== editingStockId));
+  if (existingEntries.length === 0) return false;
+  
+  if (isProductStockSeparated(p.id)) {
+    const list = (typeof stockTipos !== 'undefined' && stockTipos && stockTipos.length) ? stockTipos : ((typeof tiposData !== 'undefined') ? tiposData : []);
+    const tipo = list.find(t => t.id === p.tipo_id);
+    const options = tipo ? tipo.variantes_tipo || [] : [];
+    if (options.length === 0) return true;
+    
+    return options.every(opt => existingEntries.some(s => s.var_tipo === opt));
+  }
+  return true;
+}
+
+function onStockProductoChange() {
+  const prodId = parseInt($('#stock-producto-id').value, 10);
+  const prod = catalogoForStock.find(p => p.id === prodId);
+  const coccionGroup = $('#stock-coccion-group');
+  const coccionContainer = $('#stock-coccion-checkboxes');
+  const qtyGroup = $('#stock-cantidad-group');
+  
+  if (!prod || !isProductStockSeparated(prodId)) {
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
+    if (qtyGroup) qtyGroup.style.display = 'block';
+    return;
+  }
+  
+  const list = (typeof stockTipos !== 'undefined' && stockTipos && stockTipos.length) ? stockTipos : ((typeof tiposData !== 'undefined') ? tiposData : []);
+  const tipo = list.find(t => t.id === prod.tipo_id);
+  const options = tipo ? tipo.variantes_tipo || [] : [];
+  
+  if (options.length === 0) {
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
+    if (qtyGroup) qtyGroup.style.display = 'block';
+    return;
+  }
+  
+  if (qtyGroup) qtyGroup.style.display = 'none';
+  
+  const existingEntries = stockData.filter(s => s.producto_id === prodId && (!editingStockId || s.id !== editingStockId));
+  const existingVarTipos = existingEntries.map(s => s.var_tipo);
+  
+  if (coccionContainer) {
+    coccionContainer.innerHTML = options.map(opt => {
+      const isAlreadyInStock = existingVarTipos.includes(opt);
+      const checkedAttr = isAlreadyInStock ? '' : 'checked';
+      const disabledAttr = isAlreadyInStock ? 'disabled' : '';
+      const labelSuffix = isAlreadyInStock ? ' <span style="color:var(--text-light); font-size:0.75rem;">(Ya agregado)</span>' : '';
+      
+      return `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; ${isAlreadyInStock ? 'opacity:0.6;' : ''}">
+          <label class="sf-check" style="margin-bottom:0; flex:1; ${isAlreadyInStock ? 'pointer-events:none;' : ''}">
+            <input type="checkbox" name="stock-coccion-opt" value="${opt}" ${checkedAttr} ${disabledAttr} onchange="const qtyInput = this.closest('div').querySelector('.stock-coccion-qty'); if (qtyInput) qtyInput.disabled = !this.checked;">
+            <span class="box"></span>
+            <span style="font-size:0.85rem;">${opt}${labelSuffix}</span>
+          </label>
+          <input type="number" class="stock-coccion-qty" data-opt="${opt}" min="0" step="any" value="1" ${isAlreadyInStock ? 'disabled' : ''} style="width:85px; padding: 4px 8px; border: 1px solid var(--bg-cool-gray); border-radius: 4px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-dark); background: var(--bg-off-white);">
+        </div>
+      `;
+    }).join('');
+  }
+  if (coccionGroup) coccionGroup.style.display = 'block';
 }
 
 function onStockCategoriaChange() {
@@ -3871,9 +4190,9 @@ function filterStockProducts() {
   prodSel.innerHTML = '<option value="" disabled selected>Seleccionar</option>' +
     filteredProds
       .map(p => {
-        const isAlreadyAdded = stockData.some(s => s.producto_id === p.id && (!editingStockId || s.id !== editingStockId));
-        const disabledAttr = isAlreadyAdded ? 'disabled style="color:var(--text-light);"' : '';
-        const suffix = isAlreadyAdded ? ' (Ya agregado)' : '';
+        const isFullyAdded = isProductFullyAdded(p);
+        const disabledAttr = isFullyAdded ? 'disabled style="color:var(--text-light);"' : '';
+        const suffix = isFullyAdded ? ' (Ya agregado)' : '';
         return `<option value="${p.id}" ${disabledAttr}>${p.nombre}${suffix}</option>`;
       })
       .join('');
@@ -3883,31 +4202,71 @@ function closeStockModal() { $('#modal-stock').classList.remove('open'); }
 
 async function submitStock() {
   const producto_id = parseInt($('#stock-producto-id').value, 10) || null;
-  const cantidadRaw    = parseFloat($('#stock-cantidad').value);
-  const unidadRaw      = $('#stock-unidad').value;
-
   if (!producto_id) { toast('Seleccioná un producto', 'error'); return; }
-  if (isNaN(cantidadRaw) || cantidadRaw <= 0) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
 
-  let cantidad = cantidadRaw;
-  let unidad = 'unidades';
-  if (unidadRaw === 'docenas') {
-    cantidad = cantidad * 12;
-  }
+  const prod = catalogoForStock.find(p => p.id === producto_id);
+  const isSeparated = isProductStockSeparated(producto_id);
 
-  try {
-    if (editingStockId) {
-      await api(`/stock/${editingStockId}`, { method: 'PUT',
-        body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad }) });
-      toast('STOCK ACTUALIZADO', 'success');
-    } else {
-      await api('/stock', { method: 'POST',
-        body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad }) });
-      toast('STOCK AGREGADO', 'success');
+  if (prod && isSeparated && !editingStockId) {
+    const checkedOpts = Array.from(document.querySelectorAll('input[name="stock-coccion-opt"]:checked'));
+    if (checkedOpts.length === 0) {
+      toast('Seleccioná al menos una opción de cocción', 'error');
+      return;
     }
-    closeStockModal();
-    await loadStock();
-  } catch(e) { toast('ERROR: ' + e.message, 'error'); }
+    
+    const payloads = [];
+    const unidadRaw = $('#stock-unidad').value;
+    const unidad = 'unidades';
+
+    for (const cb of checkedOpts) {
+      const opt = cb.value;
+      const qtyInput = cb.closest('div').querySelector('.stock-coccion-qty');
+      const qtyVal = parseFloat(qtyInput ? qtyInput.value : 0);
+      if (isNaN(qtyVal) || qtyVal <= 0) {
+        toast(`La cantidad para ${opt} debe ser mayor a 0`, 'error');
+        if (qtyInput) qtyInput.focus();
+        return;
+      }
+      let finalQty = qtyVal;
+      if (unidadRaw === 'docenas') {
+        finalQty = finalQty * 12;
+      }
+      payloads.push({ producto_id, cantidad_inicial: finalQty, unidad, var_tipo: opt });
+    }
+
+    try {
+      for (const payload of payloads) {
+        await api('/stock', { method: 'POST', body: JSON.stringify(payload) });
+      }
+      toast('STOCK AGREGADO', 'success');
+      closeStockModal();
+      await loadStock();
+    } catch(e) { toast('ERROR: ' + e.message, 'error'); }
+  } else {
+    const cantidadRaw    = parseFloat($('#stock-cantidad').value);
+    const unidadRaw      = $('#stock-unidad').value;
+    if (isNaN(cantidadRaw) || cantidadRaw <= 0) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
+
+    let cantidad = cantidadRaw;
+    let unidad = 'unidades';
+    if (unidadRaw === 'docenas') {
+      cantidad = cantidad * 12;
+    }
+
+    try {
+      if (editingStockId) {
+        await api(`/stock/${editingStockId}`, { method: 'PUT',
+          body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad }) });
+        toast('STOCK ACTUALIZADO', 'success');
+      } else {
+        await api('/stock', { method: 'POST',
+          body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad, var_tipo: "" }) });
+        toast('STOCK AGREGADO', 'success');
+      }
+      closeStockModal();
+      await loadStock();
+    } catch(e) { toast('ERROR: ' + e.message, 'error'); }
+  }
 }
 
 // Ajuste manual de cantidad actual
@@ -4442,7 +4801,7 @@ async function loadWhatsAppChats() {
     const data = await api('/whatsapp/chats');
     waChatsList = Array.isArray(data) ? data : (data.chats || []);
     renderChatsList(waChatsList);
-    updateWhatsAppUnreadBadge();
+    updateWhatsAppUnreadBadge(waChatsList);
   } catch (e) {
     console.error("Error loading chats:", e);
     $('#wa-chats-list').innerHTML = `
@@ -4485,7 +4844,7 @@ function renderChatsList(chats) {
   filteredChats.forEach(c => {
     const isThisActive = (waActiveJid === c.id);
     const activeClass = isThisActive ? 'active' : '';
-    const name = c.name || c.id.split('@')[0];
+    const name = c.name || c.phoneNumber || c.id.split('@')[0];
     const unread = (c.unreadCount > 0 && !isThisActive) ? `<span class="wa-chat-unread">${c.unreadCount}</span>` : '';
     const lastMsg = getWhatsAppLastMessage(c);
     const time = formatWhatsAppTime(c.lastMessage?.messageTimestamp);
@@ -4777,16 +5136,115 @@ async function submitRenameContact() {
 }
 
 let lastKnownUnreadCount = 0;
+let lastKnownChatUnreads = null;
 
-async function updateWhatsAppUnreadBadge() {
+function showWhatsAppNotification(chat) {
+  const c = $('#toast-container');
+  if (!c) return;
+  
+  const existingId = 'wa-toast-' + chat.id.replace(/[^a-zA-Z0-9]/g, '-');
+  const existing = $('#' + existingId);
+  if (existing) return;
+  
+  const name = chat.name || chat.phoneNumber || chat.id.split('@')[0];
+  const t = document.createElement('div');
+  t.id = existingId;
+  t.className = 'toast';
+  t.style.display = 'flex';
+  t.style.justifyContent = 'space-between';
+  t.style.alignItems = 'center';
+  t.style.gap = '12px';
+  t.style.pointerEvents = 'auto';
+  t.style.borderColor = 'var(--success)';
+  t.style.boxShadow = '0 4px 15px rgba(46, 204, 113, 0.15)';
+  
+  t.innerHTML = `
+    <div style="flex:1; min-width: 0; text-align: left;">
+      <span style="display:block; font-weight:700; color:var(--text-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Mensaje de ${name}</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+      <button class="btn-ver btn-ghost" style="
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-weight: 700;
+        color: var(--success);
+        border: 1px solid rgba(46, 204, 113, 0.4);
+        border-radius: 4px;
+        cursor: pointer;
+        background: rgba(46, 204, 113, 0.05);
+        transition: all 0.2s;
+      " onmouseover="this.style.background='rgba(46, 204, 113, 0.15)'" onmouseout="this.style.background='rgba(46, 204, 113, 0.05)'">
+        VER
+      </button>
+      <button class="btn-cerrar btn-ghost" style="
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-weight: 700;
+        color: var(--text-light);
+        border: 1px solid var(--bg-cool-gray);
+        border-radius: 4px;
+        cursor: pointer;
+        background: transparent;
+        transition: all 0.2s;
+      " onmouseover="this.style.background='var(--bg-off-white)'; this.style.color='var(--accent-red)'" onmouseout="this.style.background='transparent'; this.style.color='var(--text-light)'">
+        ✕
+      </button>
+    </div>
+  `;
+  
+  const verBtn = t.querySelector('.btn-ver');
+  verBtn.addEventListener('click', () => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(10px) scale(0.95)';
+    setTimeout(() => t.remove(), 300);
+    goToWhatsAppChat(chat);
+  });
+  
+  const cerrarBtn = t.querySelector('.btn-cerrar');
+  cerrarBtn.addEventListener('click', () => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(10px) scale(0.95)';
+    setTimeout(() => t.remove(), 300);
+  });
+  
+  c.appendChild(t);
+}
+
+function goToWhatsAppChat(chat) {
+  navigateTo('whatsapp');
+  const name = chat.name || chat.phoneNumber || chat.id.split('@')[0];
+  selectWhatsAppChat(chat.id, name, chat.phoneNumber || '');
+}
+
+async function updateWhatsAppUnreadBadge(providedChats = null) {
   try {
-    const data = await api('/whatsapp/chats');
-    const chats = Array.isArray(data) ? data : (data.chats || []);
+    let chats = providedChats;
+    if (!chats) {
+      const data = await api('/whatsapp/chats');
+      chats = Array.isArray(data) ? data : (data.chats || []);
+    }
+    
+    const isFirstCheck = (lastKnownChatUnreads === null);
+    if (isFirstCheck) {
+      lastKnownChatUnreads = {};
+    }
     
     let totalUnread = 0;
     chats.forEach(c => {
+      const currentUnread = c.unreadCount || 0;
+      const prevUnread = lastKnownChatUnreads[c.id] || 0;
+      
+      if (!isFirstCheck && currentUnread > prevUnread) {
+        if (!(currentSection === 'whatsapp' && waActiveJid === c.id)) {
+          showWhatsAppNotification(c);
+        }
+      }
+      lastKnownChatUnreads[c.id] = currentUnread;
+      
       if (currentSection !== 'whatsapp' || waActiveJid !== c.id) {
-        totalUnread += c.unreadCount || 0;
+        totalUnread += currentUnread;
       }
     });
     

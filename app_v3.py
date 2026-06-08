@@ -39,7 +39,7 @@ def monitor_heartbeat():
     time.sleep(15)
     while True:
         time.sleep(2)
-        if has_received_heartbeat and (time.time() - last_heartbeat > 8.0):
+        if has_received_heartbeat and (time.time() - last_heartbeat > 90.0):
             print("  [!] No heartbeat received. Exiting...")
             if whatsapp_process:
                 try:

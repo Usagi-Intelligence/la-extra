@@ -68,7 +68,9 @@ DEFAULT_DATA = {
         "nombre_negocio": "La Extra",
         "direccion": "Calle Ejemplo 123",
         "telefono": "11 2233-4455",
-        "instagram": "@laextra.ok"
+        "instagram": "@laextra.ok",
+        "github_owner": "JooacoMendez",
+        "github_repo": "LaExtra-releases"
     }
 }
 
@@ -109,6 +111,7 @@ def _migrate(d):
         item.pop("precio_md", None)
         item.pop("precio_d", None)
         item.setdefault("sin_stock", False)
+        item.setdefault("separar_stock_coccion", False)
         item.setdefault("categoria", "Comunes")
         tipo_val = item.get("tipo_id")
         if tipo_val is None:
@@ -142,6 +145,7 @@ def _migrate(d):
         t.setdefault("admite_variantes_cantidad", False)
         t.setdefault("admite_variantes_tipo", False)
         t.setdefault("descuento_efectivo", True)
+        t.setdefault("separar_stock_coccion", False)
 
     # Ensure system fixed 'Promociones' type (ID 999) exists
     promo_tipo = next((t for t in d["producto_tipos"] if t["id"] == 999), None)
@@ -476,7 +480,7 @@ def get_variant_multiplier(var_cant):
 
 
 def descontar_stock_por_pedido(data, pedido):
-    """Subtract stock quantities for each item in a delivered pedido (matched by producto_id)."""
+    """Subtract stock quantities for each item in a delivered pedido (matched by producto_id and var_tipo)."""
     order_date = pedido.get("fecha", datetime.now().strftime("%d/%m/%Y"))
     stock = data.get("stock", [])
     for item in pedido.get("items", []):
@@ -486,9 +490,23 @@ def descontar_stock_por_pedido(data, pedido):
         qty = item.get("cantidad", 1)
         multiplier = get_variant_multiplier(item.get("var_cantidad"))
         dec_qty = float(qty) * multiplier
+        
+        item_var_tipo = item.get("var_tipo", "")
+        # Find matching stock entry by product, date, and specific var_tipo
+        matched_stock = None
         for s in stock:
-            if s.get("producto_id") == pid and s.get("fecha") == order_date:
-                s["cantidad_actual"] = max(0.0, float(s.get("cantidad_actual", 0)) - dec_qty)
+            if s.get("producto_id") == pid and s.get("fecha") == order_date and s.get("var_tipo", "") == item_var_tipo:
+                matched_stock = s
+                break
+        # Fallback to general stock entry if specific option not found in stock
+        if not matched_stock:
+            for s in stock:
+                if s.get("producto_id") == pid and s.get("fecha") == order_date and s.get("var_tipo", "") == "":
+                    matched_stock = s
+                    break
+                    
+        if matched_stock:
+            matched_stock["cantidad_actual"] = max(0.0, float(matched_stock.get("cantidad_actual", 0)) - dec_qty)
 
 
 def devolver_stock_por_pedido(data, pedido):
@@ -502,9 +520,23 @@ def devolver_stock_por_pedido(data, pedido):
         qty = item.get("cantidad", 1)
         multiplier = get_variant_multiplier(item.get("var_cantidad"))
         dec_qty = float(qty) * multiplier
+        
+        item_var_tipo = item.get("var_tipo", "")
+        # Find matching stock entry by product, date, and specific var_tipo
+        matched_stock = None
         for s in stock:
-            if s.get("producto_id") == pid and s.get("fecha") == order_date:
-                s["cantidad_actual"] = float(s.get("cantidad_actual", 0)) + dec_qty
+            if s.get("producto_id") == pid and s.get("fecha") == order_date and s.get("var_tipo", "") == item_var_tipo:
+                matched_stock = s
+                break
+        # Fallback to general stock entry if specific option not found in stock
+        if not matched_stock:
+            for s in stock:
+                if s.get("producto_id") == pid and s.get("fecha") == order_date and s.get("var_tipo", "") == "":
+                    matched_stock = s
+                    break
+                    
+        if matched_stock:
+            matched_stock["cantidad_actual"] = float(matched_stock.get("cantidad_actual", 0)) + dec_qty
 
 
 # ── Gastos helpers ────────────────────────────────────────────────────────────

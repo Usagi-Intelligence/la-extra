@@ -5,35 +5,40 @@
       "nombre": "Promociones",
       "admite_variantes_cantidad": false,
       "admite_variantes_tipo": false,
-      "descuento_efectivo": false
+      "descuento_efectivo": false,
+      "separar_stock_coccion": false
     },
     {
       "id": 1000,
       "nombre": "Empanadas",
       "admite_variantes_tipo": true,
       "admite_variantes_cantidad": false,
-      "descuento_efectivo": true
+      "descuento_efectivo": true,
+      "separar_stock_coccion": true
     },
     {
       "id": 1001,
       "nombre": "Pizza",
       "admite_variantes_tipo": false,
       "admite_variantes_cantidad": true,
-      "descuento_efectivo": false
+      "descuento_efectivo": false,
+      "separar_stock_coccion": false
     },
     {
       "id": 1002,
       "nombre": "Panaderia",
       "admite_variantes_tipo": false,
       "admite_variantes_cantidad": false,
-      "descuento_efectivo": false
+      "descuento_efectivo": false,
+      "separar_stock_coccion": false
     },
     {
       "id": 1003,
       "nombre": "Bebidas",
       "admite_variantes_tipo": false,
       "admite_variantes_cantidad": false,
-      "descuento_efectivo": false
+      "descuento_efectivo": false,
+      "separar_stock_coccion": false
     }
   ],
   "categorias_por_tipo": {},
@@ -127,7 +132,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 2,
@@ -146,7 +152,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 4,
@@ -164,7 +171,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 5,
@@ -182,7 +190,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 6,
@@ -202,7 +211,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 7,
@@ -220,7 +230,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 8,
@@ -238,7 +249,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 9,
@@ -263,7 +275,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 10,
@@ -281,7 +294,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 11,
@@ -299,7 +313,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 12,
@@ -317,7 +332,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 13,
@@ -335,7 +351,8 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
     },
     {
       "id": 14,
@@ -356,11 +373,127 @@
       "descuento_efectivo": true,
       "excluir_descuento_efectivo": false,
       "promo_items": [],
-      "abreviacion": ""
+      "abreviacion": "",
+      "separar_stock_coccion": false
+    },
+    {
+      "id": 15,
+      "nombre": "PROMO 1",
+      "abrev": "P",
+      "categoria": "Comunes",
+      "tipo_id": 999,
+      "precio_u": 20000.0,
+      "sin_stock": false,
+      "precios_variantes": {},
+      "variantes_inactivas": [],
+      "descuento_efectivo": true,
+      "excluir_descuento_efectivo": false,
+      "promo_items": [
+        {
+          "cantidad": 6,
+          "descuento_efectivo": false,
+          "libre_eleccion_tipo": true,
+          "tipo_id": 1000,
+          "var_cantidad": "",
+          "var_tipo": ""
+        },
+        {
+          "cantidad": 1,
+          "descuento_efectivo": false,
+          "libre_eleccion_tipo": true,
+          "tipo_id": 1001,
+          "var_cantidad": "Entera {1}",
+          "var_tipo": ""
+        }
+      ],
+      "abreviacion": "",
+      "separar_stock_coccion": false
     }
   ],
-  "historial": [],
-  "last_seen_date": "04/06/2026",
+  "historial": [
+    {
+      "id": 1,
+      "fecha": "06/06/2026",
+      "hora_registro": "19:20",
+      "hora_retiro": "",
+      "ts_inicio": 1780784425.039559,
+      "ts_entrega": null,
+      "cliente": "Lau",
+      "telefono": "",
+      "notas": "",
+      "detalle_compact": "CARNE — Frita: 12",
+      "detalle": "12x CARNE — Frita",
+      "items": [
+        {
+          "producto_id": 1,
+          "nombre": "CARNE",
+          "tipo_id": 1000,
+          "tipo": "Empanadas",
+          "var_tipo": "Frita",
+          "var_cantidad": "",
+          "precio": 1900,
+          "cantidad": 12,
+          "descuento_efectivo": true
+        }
+      ],
+      "subtotal": 22800,
+      "descuento": 0.0,
+      "total": 22800,
+      "pago": {
+        "metodo": "Mixto"
+      },
+      "envio": {
+        "envio": false
+      },
+      "estado": "Entregado",
+      "elapsed": 0,
+      "pagado": true
+    },
+    {
+      "id": 2,
+      "fecha": "06/06/2026",
+      "hora_registro": "19:23",
+      "hora_retiro": "20:07",
+      "ts_inicio": 1780784591.884185,
+      "ts_entrega": null,
+      "cliente": "Facu",
+      "telefono": "",
+      "notas": "",
+      "detalle_compact": "PROMO 1 — 6x Empanadas [6 VERDURA (Frita)] + 1x Pizza [1 MUZZARELLA (Entera {1})]: 1",
+      "detalle": "1x PROMO 1 — 6x Empanadas [6 VERDURA (Frita)] + 1x Pizza [1 MUZZARELLA (Entera {1})]",
+      "items": [
+        {
+          "producto_id": 15,
+          "nombre": "PROMO 1",
+          "tipo_id": 999,
+          "tipo": "Promociones",
+          "var_tipo": "6x Empanadas [6 VERDURA (Frita)] + 1x Pizza [1 MUZZARELLA (Entera {1})]",
+          "var_cantidad": "",
+          "precio": 20000,
+          "cantidad": 1,
+          "descuento_efectivo": 0
+        }
+      ],
+      "subtotal": 20000,
+      "descuento": 0.0,
+      "total": 20000,
+      "pago": {
+        "metodo": "Transferencia"
+      },
+      "envio": {
+        "envio": true,
+        "direccion": "Punta Alta 1235",
+        "costo_envio": 0,
+        "cliente_paga_envio": false,
+        "costo_desconocido": false,
+        "_confirmado": true
+      },
+      "estado": "Entregado",
+      "elapsed": 23.689738035202026,
+      "pagado": true
+    }
+  ],
+  "last_seen_date": "08/06/2026",
   "last_seen_month": "06/2026",
   "nombre_negocio": "La Extra",
   "notas": [],
@@ -373,7 +506,9 @@
     "reiniciar_stock_diariamente": true,
     "whatsapp_url": "http://localhost:8080",
     "whatsapp_token": "laextra123",
-    "whatsapp_instance": "laextra"
+    "whatsapp_instance": "laextra",
+    "github_owner": "catra6",
+    "github_repo": "la-extra"
   },
   "stock": [
     {
@@ -490,6 +625,7 @@
     "253072542535844@lid": "valen",
     "210938795966488@lid": "Nicole Fritz",
     "253673770844181@lid": "mauro",
-    "10488930918616@lid": "kappes"
+    "10488930918616@lid": "kappes",
+    "248304961085453@lid": "chaves"
   }
 }

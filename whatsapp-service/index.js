@@ -39,8 +39,25 @@ setInterval(() => {
 let sock = null;
 let currentQr = null;
 let connectionState = 'close'; // 'open', 'connecting', 'close'
+let reconnectTimeout = null;
 
 async function connectToWhatsApp() {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+
+  // Gracefully clean up old socket if it exists to avoid duplicate active listeners
+  if (sock) {
+    try {
+      sock.ev.removeAllListeners();
+      sock.end();
+    } catch (e) {
+      console.error("Error ending previous socket:", e);
+    }
+    sock = null;
+  }
+
   const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'auth_info_baileys'));
   
   let version = [2, 3000, 1015901307]; // fallback
@@ -79,8 +96,9 @@ async function connectToWhatsApp() {
     if (connection === 'close') {
       currentQr = null;
       console.log('Last disconnect error details:', lastDisconnect?.error);
-      const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
-      console.log(`Connection closed. Logged out: ${isLoggedOut}`);
+      const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      console.log(`Connection closed. Logged out: ${isLoggedOut}, Status Code: ${statusCode}`);
       
       if (isLoggedOut) {
         const authDir = path.join(__dirname, 'auth_info_baileys');
@@ -94,8 +112,13 @@ async function connectToWhatsApp() {
         }
       }
       
-      console.log('Reconnecting / Restarting WhatsApp socket connection...');
-      connectToWhatsApp();
+      console.log('Reconnecting / Restarting WhatsApp socket connection in 5 seconds...');
+      if (!reconnectTimeout) {
+        reconnectTimeout = setTimeout(() => {
+          reconnectTimeout = null;
+          connectToWhatsApp();
+        }, 5000);
+      }
     } else if (connection === 'open') {
       currentQr = null;
       console.log('WhatsApp connection successfully opened!');
@@ -113,6 +136,43 @@ async function connectToWhatsApp() {
   sock.ev.on('contacts.upsert', (contacts) => {
     console.log(`  [+] Contact update: synced ${contacts?.length || 0} contacts.`);
   });
+function getSiblingJid(jid, store) {
+  if (!jid) return null;
+  if (jid.endsWith('@lid')) {
+    const chat = store.chats.all().find(c => c.id === jid);
+    if (chat && chat.pnJid) return chat.pnJid;
+    const contact = store.contacts[jid];
+    const nameToSearch = (contact?.name || contact?.verifiedName || chat?.name || '').toLowerCase().trim();
+    if (nameToSearch) {
+      const match = Object.values(store.contacts).find(tc => 
+        tc.id && 
+        tc.id.endsWith('@s.whatsapp.net') && 
+        (tc.name || tc.verifiedName || '').toLowerCase().trim() === nameToSearch
+      );
+      if (match) return match.id;
+    }
+  } else if (jid.endsWith('@s.whatsapp.net')) {
+    const chat = store.chats.all().find(c => c.pnJid === jid);
+    if (chat) return chat.id;
+    const contact = store.contacts[jid];
+    const nameToSearch = (contact?.name || contact?.verifiedName || chat?.name || '').toLowerCase().trim();
+    if (nameToSearch) {
+      const match = Object.values(store.contacts).find(tc => 
+        tc.id && 
+        tc.id.endsWith('@lid') && 
+        (tc.name || tc.verifiedName || '').toLowerCase().trim() === nameToSearch
+      );
+      if (match) return match.id;
+    }
+  }
+  return null;
+}
+
+function getCanonicalJid(jid, store) {
+  if (!jid) return jid;
+  if (jid.endsWith('@s.whatsapp.net')) return jid;
+  const sibling = getSiblingJid(jid, store);
+  return sibling || jid;
 }
 
 // REST API mimicking Evolution API endpoints
@@ -186,8 +246,12 @@ app.post('/chat/findChats/:instance', (req, res) => {
       const pushName = lastIncomingMessage ? lastIncomingMessage.pushName : null;
       const contact = store.contacts[c.id] || (c.pnJid ? store.contacts[c.pnJid] : null);
       
+      const canonicalJid = getCanonicalJid(c.id, store);
+      
       let phoneNumber = null;
-      if (c.pnJid) {
+      if (canonicalJid.endsWith('@s.whatsapp.net')) {
+        phoneNumber = canonicalJid.split('@')[0];
+      } else if (c.pnJid) {
         phoneNumber = c.pnJid.split('@')[0];
       } else if (c.id && c.id.endsWith('@s.whatsapp.net')) {
         phoneNumber = c.id.split('@')[0];
@@ -195,11 +259,9 @@ app.post('/chat/findChats/:instance', (req, res) => {
         phoneNumber = contact.id.split('@')[0];
       }
       
-      const canonicalJid = c.pnJid || (c.id.endsWith('@s.whatsapp.net') ? c.id : c.id);
-      
       const chatItem = {
-        id: c.id,
-        name: c.name || contact?.name || contact?.verifiedName || contact?.notify || pushName || null,
+        id: canonicalJid,
+        name: contact?.name || contact?.verifiedName || c.name || contact?.notify || pushName || null,
         phoneNumber: phoneNumber || c.id.split('@')[0],
         unreadCount: c.unreadCount || 0,
         lastMessage: lastMessage,
@@ -221,7 +283,6 @@ app.post('/chat/findChats/:instance', (req, res) => {
         };
         
         if (getTs(chatItem) > getTs(existing)) {
-          existing.id = chatItem.id;
           existing.lastMessage = chatItem.lastMessage;
         }
         if (!existing.name) {
@@ -260,9 +321,7 @@ app.post('/chat/findMessages/:instance', async (req, res) => {
     return res.status(400).json({ error: "Missing remoteJid in query where clause" });
   }
   
-  const siblingJid = jid.endsWith('@lid') 
-    ? (store.chats.all().find(c => c.id === jid)?.pnJid || null)
-    : (store.chats.all().find(c => c.pnJid === jid)?.id || null);
+  const siblingJid = getSiblingJid(jid, store);
     
   let messages = [];
   try {

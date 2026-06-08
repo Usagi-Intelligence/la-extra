@@ -106,6 +106,31 @@
         </div>
       </div>
 
+      <!-- ACTUALIZACIÓN AUTOMÁTICA -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>ACTUALIZACIÓN AUTOMÁTICA</span>
+        </div>
+        <div class="panel-body">
+          <div style="font-family:var(--font-mono); font-size:0.82rem; display:flex; flex-direction:column; gap:8px;">
+            <div>Versión Actual: <span style="color:var(--accent); font-weight:700;" id="lbl-update-current-version">-</span></div>
+            <div>GitHub Owner: <span id="lbl-update-owner" style="color:var(--text-dark); font-weight:600;">-</span></div>
+            <div>GitHub Repo: <span id="lbl-update-repo" style="color:var(--text-dark); font-weight:600;">-</span></div>
+            
+            <div id="update-status" style="margin-top:4px; padding:6px; border:1px dashed var(--bg-cool-gray); border-radius:4px; font-size:0.75rem; text-align:center; color:var(--text-muted);">
+              Presione "BUSCAR ACTUALIZACIÓN"
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px;">
+              <button class="btn btn-sm" onclick="checkForUpdates()">BUSCAR ACTUALIZACIÓN</button>
+              <button class="btn btn-sm btn-danger" id="btn-run-update" onclick="runUpdate()" disabled>ACTUALIZAR AHORA</button>
+            </div>
+            <div class="dot-sep" style="margin-top: 8px; margin-bottom: 8px;"></div>
+            <button class="btn btn-sm" style="width:100%;" onclick="openUpdateConfigModal()">✎ CONFIGURAR REPO</button>
+          </div>
+        </div>
+      </div>
+
       <!-- HERRAMIENTAS -->
       <div class="panel">
         <div class="panel-header">

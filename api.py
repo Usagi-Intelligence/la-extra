@@ -42,6 +42,7 @@ def create_tipo():
         "nombre": body.get("nombre", "").strip(),
         "admite_variantes_tipo": bool(body.get("admite_variantes_tipo")),
         "admite_variantes_cantidad": bool(body.get("admite_variantes_cantidad")),
+        "separar_stock_coccion": bool(body.get("separar_stock_coccion")),
         "descuento_efectivo": bool(body.get("descuento_efectivo", True))
     }
     
@@ -77,6 +78,7 @@ def update_tipo(tipo_id):
     tipo["nombre"] = nombre
     tipo["admite_variantes_tipo"] = bool(body.get("admite_variantes_tipo"))
     tipo["admite_variantes_cantidad"] = bool(body.get("admite_variantes_cantidad"))
+    tipo["separar_stock_coccion"] = bool(body.get("separar_stock_coccion"))
     tipo["descuento_efectivo"] = bool(body.get("descuento_efectivo", True))
     
     data.setdefault("variantes_tipo_por_tipo", {})[str(tipo_id)] = body.get("variantes_tipo", [])
@@ -877,6 +879,7 @@ def create_stock():
         "fecha": body.get("fecha", datetime.now().strftime("%d/%m/%Y")),
         "nombre": prod["nombre"],
         "producto_id": producto_id,
+        "var_tipo": body.get("var_tipo", ""),
         "cantidad_inicial": cantidad,
         "cantidad_actual": cantidad,
         "unidad": unidad,
@@ -937,13 +940,14 @@ def stock_carryover():
     yesterday = yesterday_dt.strftime("%d/%m/%Y")
 
     stock = data.get("stock", [])
-    today_ids = {s["producto_id"] for s in stock if s.get("fecha") == today}
+    today_keys = {(s["producto_id"], s.get("var_tipo", "")) for s in stock if s.get("fecha") == today}
     yesterday_items = [s for s in stock if s.get("fecha") == yesterday]
 
     added = 0
     for s in yesterday_items:
         pid = s["producto_id"]
-        if pid in today_ids:
+        v_tipo = s.get("var_tipo", "")
+        if (pid, v_tipo) in today_keys:
             continue  # already has an entry today
         leftover = s.get("cantidad_actual", 0)
         new_item = {
@@ -951,12 +955,13 @@ def stock_carryover():
             "fecha": today,
             "nombre": s["nombre"],
             "producto_id": pid,
+            "var_tipo": v_tipo,
             "cantidad_inicial": leftover,
             "cantidad_actual": leftover,
             "unidad": s.get("unidad", "unidades"),
         }
         data["stock"].append(new_item)
-        today_ids.add(pid)
+        today_keys.add((pid, v_tipo))
         added += 1
 
     if added:
@@ -1379,5 +1384,71 @@ def borrar_datos():
         dm.save_data(data)
         
     return jsonify({"success": True, "deleted": deleted_things})
+
+
+# ── Updates ───────────────────────────────────────────────────────────────────
+
+@api.route("/updates/info", methods=["GET"])
+def get_updates_info():
+    data = dm.get_data()
+    config = data.get("config", {})
+    return jsonify({
+        "current_version": dm.VERSION,
+        "github_owner": config.get("github_owner", "JooacoMendez"),
+        "github_repo": config.get("github_repo", "LaExtra-releases")
+    })
+
+@api.route("/updates/check", methods=["POST"])
+def check_updates():
+    try:
+        import updater
+        tiene_act, ultima_version, _, err = updater.chequear_actualizacion()
+        if err:
+            return jsonify({"error": err}), 400
+        return jsonify({
+            "has_update": tiene_act,
+            "latest_version": ultima_version,
+            "current_version": dm.VERSION
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api.route("/updates/install", methods=["POST"])
+def install_updates():
+    try:
+        import updater
+        success, details = updater.buscar_e_instalar_actualizacion(manual=True)
+        return jsonify({"success": success, "details": details})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api.route("/updates/config", methods=["POST"])
+def update_updates_config():
+    body = request.get_json() or {}
+    password = body.get("password", "")
+    owner = body.get("github_owner", "").strip()
+    repo = body.get("github_repo", "").strip()
+    
+    if not owner or not repo:
+        return jsonify({"error": "Repositorio y dueño son obligatorios"}), 400
+        
+    try:
+        import updater
+        required_password = getattr(updater, "ADMIN_PASSWORD", "1234")
+    except Exception:
+        required_password = "1234"
+        
+    if password != required_password:
+        return jsonify({"error": "Contraseña incorrecta"}), 403
+        
+    data = dm.get_data()
+    if "config" not in data:
+        data["config"] = {}
+    data["config"]["github_owner"] = owner
+    data["config"]["github_repo"] = repo
+    dm.save_data(data)
+    
+    return jsonify({"success": True})
+
 
 
