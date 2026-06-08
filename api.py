@@ -1394,8 +1394,8 @@ def get_updates_info():
     config = data.get("config", {})
     return jsonify({
         "current_version": dm.VERSION,
-        "github_owner": config.get("github_owner", "JooacoMendez"),
-        "github_repo": config.get("github_repo", "LaExtra-releases")
+        "github_owner": config.get("github_owner", "Usagi-Intelligence"),
+        "github_repo": config.get("github_repo", "la-extra")
     })
 
 @api.route("/updates/check", methods=["POST"])

@@ -69,8 +69,8 @@ DEFAULT_DATA = {
         "direccion": "Calle Ejemplo 123",
         "telefono": "11 2233-4455",
         "instagram": "@laextra.ok",
-        "github_owner": "JooacoMendez",
-        "github_repo": "LaExtra-releases"
+        "github_owner": "Usagi-Intelligence",
+        "github_repo": "la-extra"
     }
 }
 

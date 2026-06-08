@@ -1,7 +1,9 @@
 """
 updater.py - Sistema de actualización automática estilo Discord adaptado para La Extra.
 """
-import requests
+import urllib.request
+import urllib.error
+import json
 import os
 import sys
 import subprocess
@@ -34,7 +36,7 @@ def chequear_actualizacion():
     """
     data_store = dm.get_data()
     config = data_store.get("config", {})
-    repo_owner = config.get("github_owner", "catra6").strip()
+    repo_owner = config.get("github_owner", "Usagi-Intelligence").strip()
     repo_name = config.get("github_repo", "la-extra").strip()
     version_actual = dm.VERSION
 
@@ -44,11 +46,20 @@ def chequear_actualizacion():
     url_api = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
 
     try:
-        response = requests.get(url_api, timeout=10)
-        if response.status_code != 200:
-            return False, None, None, f"No se pudo consultar el repositorio (Status {response.status_code})"
+        req = urllib.request.Request(url_api, headers={"User-Agent": "LaExtra-Updater"})
+        try:
+            response = urllib.request.urlopen(req, timeout=10)
+        except Exception:
+            import ssl
+            context = ssl._create_unverified_context()
+            response = urllib.request.urlopen(req, timeout=10, context=context)
 
-        data = response.json()
+        with response:
+            status_code = response.status
+            if status_code != 200:
+                return False, None, None, f"No se pudo consultar el repositorio (Status {status_code})"
+            data = json.loads(response.read().decode("utf-8"))
+
         ultima_version = data.get("tag_name", "").lstrip("v")
 
         if not ultima_version:
@@ -73,10 +84,12 @@ def chequear_actualizacion():
 
         return True, ultima_version, url_zip, None
 
-    except requests.exceptions.ConnectionError:
-        return False, None, None, "Sin conexión a internet."
+    except urllib.error.HTTPError as e:
+        return False, None, None, f"Error HTTP {e.code}: {e.reason}"
+    except urllib.error.URLError as e:
+        return False, None, None, f"Error de red: {e.reason}"
     except Exception as e:
-        return False, None, None, str(e)
+        return False, None, None, f"Error inesperado: {str(e)}"
 
 def buscar_e_instalar_actualizacion(manual=False):
     """Busca una nueva versión en GitHub y la instala si existe.
@@ -121,15 +134,27 @@ def _descargar_e_instalar(url_zip, nueva_version):
 
     try:
         print(f"Descargando actualización {nueva_version}...")
-        response = requests.get(url_zip, stream=True, timeout=60)
-        if response.status_code != 200:
-            raise Exception(f"Fallo descarga (Status {response.status_code})")
+        req = urllib.request.Request(url_zip, headers={"User-Agent": "LaExtra-Updater"})
+        try:
+            response = urllib.request.urlopen(req, timeout=60)
+        except Exception:
+            import ssl
+            context = ssl._create_unverified_context()
+            response = urllib.request.urlopen(req, timeout=60, context=context)
 
-        zip_path = os.path.join(tempfile.gettempdir(), f"laextra_{nueva_version}.zip")
+        with response:
+            status_code = response.status
+            if status_code != 200:
+                raise Exception(f"Fallo descarga (Status {status_code})")
 
-        with open(zip_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+            zip_path = os.path.join(tempfile.gettempdir(), f"laextra_{nueva_version}.zip")
+
+            with open(zip_path, 'wb') as f:
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    f.write(chunk)
 
         print(f"Instalando versión {nueva_version}...")
         os.makedirs(nueva_dir, exist_ok=True)
