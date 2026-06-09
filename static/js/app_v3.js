@@ -503,7 +503,6 @@ const SECTIONS = {
   catalogo:     { title: 'CATÁLOGO',       subtitle: '// Gestión de productos y categorías' },
   resumen:      { title: 'RESUMEN',        subtitle: '// Panel de finanzas' },
   gastosstock:  { title: 'STOCK',          subtitle: '// Control de stock' },
-  whatsapp:     { title: 'WHATSAPP',       subtitle: '// Mensajería y clientes' },
   sistema:      { title: 'INFORMACIÓN',    subtitle: '// Configuración' },
 };
 
@@ -533,11 +532,6 @@ function navigateTo(section) {
   const fab = $('#fab-new-order');
   if (fab) fab.style.display = section === 'pedidos' ? 'flex' : 'none';
 
-  // Clear WhatsApp intervals when leaving the section
-  if (section !== 'whatsapp') {
-    clearWhatsAppIntervals();
-  }
-
   if (section === 'pedidos') loadPedidos();
   if (section === 'catalogo') switchCatTab(currentCatTab);
   if (section === 'resumen') {
@@ -552,7 +546,6 @@ function navigateTo(section) {
   }
   if (section === 'gastosstock') loadGastosStock();
   if (section === 'sistema') loadSistema();
-  if (section === 'whatsapp') initWhatsAppSection();
 }
 
 function showSection(section) {
@@ -1080,10 +1073,6 @@ async function openPedidoModal(orderId = null) {
   $('#modal-pedido').classList.add('open');
   setTimeout(() => $('#ped-cliente').focus(), 100);
 
-  if (pinnedChatForOrder) {
-    openChatPopup(pinnedChatForOrder.jid, pinnedChatForOrder.name, pinnedChatForOrder.phone);
-  }
-
   // Silently pre-load today's stock data for insufficient stock checks
   try {
     stockData = await api('/stock');
@@ -1095,8 +1084,6 @@ async function openPedidoModal(orderId = null) {
 function closePedidoModal() {
   $('#modal-pedido').classList.remove('open');
   $('#ped-search-results').classList.remove('visible');
-  closeChatPopup();
-  pinnedChatForOrder = null;
   editingOrderId = null;
   originalOrderItems = [];
 }
@@ -3442,35 +3429,39 @@ async function checkForUpdates() {
 }
 
 async function runUpdate() {
-  showConfirm('Instalar Actualización', 'El sistema se descargará, instalará y reiniciará automáticamente. ¿Continuar?', async () => {
-    const statusEl = $('#update-status');
-    const btnRun = $('#btn-run-update');
-    if (statusEl) {
-      statusEl.textContent = 'Descargando e instalando...';
-      statusEl.style.color = 'var(--accent)';
-    }
-    if (btnRun) btnRun.disabled = true;
-    
-    try {
-      toast('DESCARGANDO ACTUALIZACIÓN...', 'success');
-      const res = await api('/updates/install', { method: 'POST' });
-      if (res.success) {
-        toast('ACTUALIZACIÓN COMPLETADA. REINICIANDO...', 'success');
-      } else {
-        toast('ERROR AL ACTUALIZAR: ' + res.details, 'error');
-        if (statusEl) {
-          statusEl.textContent = 'Error: ' + res.details;
-          statusEl.style.color = 'var(--accent-red)';
-        }
-      }
-    } catch (e) {
-      toast('ERROR AL ACTUALIZAR: ' + e.message, 'error');
+  const statusEl = $('#update-status');
+  const btnRun = $('#btn-run-update');
+  if (statusEl) {
+    statusEl.textContent = 'Abriendo navegador...';
+    statusEl.style.color = 'var(--accent)';
+  }
+  if (btnRun) btnRun.disabled = true;
+  
+  try {
+    toast('ABRIENDO PÁGINA DE RELEASES...', 'success');
+    const res = await api('/updates/install', { method: 'POST' });
+    if (res.success) {
+      toast('NAVEGADOR ABIERTO CON LA DESCARGA', 'success');
       if (statusEl) {
-        statusEl.textContent = 'Error: ' + e.message;
+        statusEl.textContent = 'Navegador abierto en la página de releases.';
+        statusEl.style.color = 'var(--success)';
+      }
+    } else {
+      toast('ERROR AL BUSCAR ACTUALIZACIÓN: ' + res.details, 'error');
+      if (statusEl) {
+        statusEl.textContent = 'Error: ' + res.details;
         statusEl.style.color = 'var(--accent-red)';
       }
+      if (btnRun) btnRun.disabled = false;
     }
-  });
+  } catch (e) {
+    toast('ERROR: ' + e.message, 'error');
+    if (statusEl) {
+      statusEl.textContent = 'Error: ' + e.message;
+      statusEl.style.color = 'var(--accent-red)';
+    }
+    if (btnRun) btnRun.disabled = false;
+  }
 }
 
 function openUpdateConfigModal() {
@@ -3806,8 +3797,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 setInterval(() => { if (currentSection === 'pedidos') loadPedidos(); }, 30000);
-setInterval(updateWhatsAppUnreadBadge, 15000);
-setTimeout(updateWhatsAppUnreadBadge, 2000);
 
 // ═══ GASTOS & STOCK ══════════════════════════════════════════════════════════
 
@@ -4644,843 +4633,7 @@ async function deleteGasto(gid) {
 }
 
 
-// ── WHATSAPP INTEGRATION ─────────────────────────────────────────────────────
-
-let waActiveJid = null;
-let waChatsList = [];
-let waStatusInterval = null;
-let waMessagesInterval = null;
-let isLoadingMessages = false;
-let lastActiveChatMsgCount = 0;
-let lastActiveChatMsgId = '';
-
-function clearWhatsAppIntervals() {
-  if (waStatusInterval) {
-    clearInterval(waStatusInterval);
-    waStatusInterval = null;
-  }
-  if (waMessagesInterval) {
-    clearInterval(waMessagesInterval);
-    waMessagesInterval = null;
-  }
-}
-
-async function initWhatsAppSection() {
-  clearWhatsAppIntervals();
-  
-  const configured = await checkWhatsAppStatus();
-  if (!configured) return; // No polling if not configured
-  
-  // Status check every 15 seconds only when configured
-  waStatusInterval = setInterval(async () => {
-    if (currentSection === 'whatsapp') {
-      const statusRes = await api('/whatsapp/status').catch(() => null);
-      if (statusRes && statusRes.connected) {
-        loadWhatsAppChats();
-      } else if (statusRes && !statusRes.connected) {
-        // Still disconnected, show QR refresh
-      }
-    }
-  }, 15000);
-}
-
-async function saveWhatsAppConfig() {
-  const url = $('#wa-setup-url') ? $('#wa-setup-url').value.trim() : '';
-  const token = $('#wa-setup-token') ? $('#wa-setup-token').value.trim() : '';
-  const instance = ($('#wa-setup-instance') && $('#wa-setup-instance').value.trim()) 
-    ? $('#wa-setup-instance').value.trim() 
-    : 'laextra';
-  
-  if (!url || !token) {
-    toast('COMPLETÁ URL Y TOKEN', 'error');
-    return;
-  }
-  
-  try {
-    await api('/config', { method: 'PUT', body: JSON.stringify({
-      whatsapp_url: url,
-      whatsapp_token: token,
-      whatsapp_instance: instance
-    }) });
-    toast('CONFIGURACIÓN GUARDADA', 'success');
-    await checkWhatsAppStatus();
-    const configured = await checkWhatsAppStatus();
-    if (configured) {
-      const waStatusInterval2 = setInterval(async () => {
-        if (currentSection === 'whatsapp') {
-          const statusRes = await api('/whatsapp/status').catch(() => null);
-          if (statusRes && statusRes.connected) {
-            loadWhatsAppChats();
-          }
-        }
-      }, 15000);
-    }
-  } catch (e) {
-    toast('ERROR AL GUARDAR: ' + e.message, 'error');
-  }
-}
-
-function resetWhatsAppConfig() {
-  const waUnconfigured = $('#wa-unconfigured');
-  const waDisconnected = $('#wa-disconnected');
-  const waChatLayout = $('#wa-chat-layout');
-  
-  if (waDisconnected) waDisconnected.style.display = 'none';
-  if (waChatLayout) waChatLayout.style.display = 'none';
-  if (waUnconfigured) waUnconfigured.style.display = 'block';
-  
-  clearWhatsAppIntervals();
-}
-
-async function checkWhatsAppStatus() {
-  const waUnconfigured = $('#wa-unconfigured');
-  const waLoading = $('#wa-loading');
-  const waDisconnected = $('#wa-disconnected');
-  const waChatLayout = $('#wa-chat-layout');
-  
-  if (!waUnconfigured || !waLoading) return false; // Section not visible
-  
-  waUnconfigured.style.display = 'none';
-  waLoading.style.display = 'block';
-  waDisconnected.style.display = 'none';
-  waChatLayout.style.display = 'none';
-  
-  try {
-    const res = await api('/whatsapp/status');
-    waLoading.style.display = 'none';
-    
-    if (res.connected) {
-      waChatLayout.style.display = 'flex';
-      await loadWhatsAppChats();
-    } else {
-      waDisconnected.style.display = 'block';
-      const qrContainer = $('#wa-qr-container');
-      if (res.qr) {
-        if (res.qr.startsWith('data:image')) {
-          qrContainer.innerHTML = `<img src="${res.qr}" style="width:220px; height:220px; display:block; image-rendering:pixelated;">`;
-        } else {
-          qrContainer.innerHTML = `
-            <div style="padding:15px; font-family:var(--font-mono); font-size:0.75rem; word-break:break-all; color:var(--text-dark);">
-              ${res.qr}
-            </div>`;
-        }
-      } else {
-        qrContainer.innerHTML = `
-          <div style="width:200px; height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.8rem;">
-            No hay código QR disponible
-          </div>`;
-      }
-    }
-    return true; // Configured and responded
-  } catch (e) {
-    waLoading.style.display = 'none';
-    const isUnconfigured = e.message === 'no_configurado'
-      || e.message.toLowerCase().includes('no configurado')
-      || e.message.toLowerCase().includes('configurado');
-    if (isUnconfigured) {
-      waUnconfigured.style.display = 'block';
-      // Pre-fill form with any saved values
-      api('/config').then(cfg => {
-        if (cfg && $('#wa-setup-url')) {
-          if (cfg.whatsapp_url) $('#wa-setup-url').value = cfg.whatsapp_url;
-          if (cfg.whatsapp_token) $('#wa-setup-token').value = cfg.whatsapp_token;
-          if (cfg.whatsapp_instance) $('#wa-setup-instance').value = cfg.whatsapp_instance;
-        }
-      }).catch(() => {});
-      return false; // Not configured
-    } else {
-      toast('ERROR WHATSAPP: ' + e.message, 'error');
-      waUnconfigured.style.display = 'block';
-      return false;
-    }
-  }
-}
-
-async function loadWhatsAppChats() {
-  try {
-    const data = await api('/whatsapp/chats');
-    waChatsList = Array.isArray(data) ? data : (data.chats || []);
-    renderChatsList(waChatsList);
-    updateWhatsAppUnreadBadge(waChatsList);
-  } catch (e) {
-    console.error("Error loading chats:", e);
-    $('#wa-chats-list').innerHTML = `
-      <div style="padding: 20px; text-align: center; color: var(--accent-red); font-family: var(--font-body); font-size: 0.8rem;">
-        Error al cargar chats: ${e.message}
-      </div>
-    `;
-  }
-}
-
-function renderChatsList(chats) {
-  const listEl = $('#wa-chats-list');
-  const filteredChats = chats.filter(c => {
-    const deletedTime = parseInt(localStorage.getItem('wa-deleted-' + c.id) || '0');
-    if (deletedTime > 0 && c.unreadCount === 0) {
-      const getTs = (chat) => {
-        const lm = chat.lastMessage;
-        if (lm && lm.messageTimestamp) {
-          return Number(lm.messageTimestamp.low || lm.messageTimestamp || 0);
-        }
-        return 0;
-      };
-      if (getTs(c) <= deletedTime) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  if (!filteredChats || filteredChats.length === 0) {
-    listEl.innerHTML = `
-      <div style="padding: 20px; text-align: center; color: var(--text-muted); font-family: var(--font-body); font-size: 0.85rem;">
-        No se encontraron chats
-      </div>
-    `;
-    return;
-  }
-
-  let html = '';
-  filteredChats.forEach(c => {
-    const isThisActive = (waActiveJid === c.id);
-    const activeClass = isThisActive ? 'active' : '';
-    const name = c.name || c.phoneNumber || c.id.split('@')[0];
-    const unread = (c.unreadCount > 0 && !isThisActive) ? `<span class="wa-chat-unread">${c.unreadCount}</span>` : '';
-    const lastMsg = getWhatsAppLastMessage(c);
-    const time = formatWhatsAppTime(c.lastMessage?.messageTimestamp);
-    html += `
-      <div class="wa-chat-item ${activeClass}" onclick="selectWhatsAppChat('${c.id}', '${name.replace(/'/g, "\\'")}', '${c.phoneNumber}')">
-        <div class="wa-chat-item-header">
-          <span class="wa-chat-name">${name}</span>
-          <span class="wa-chat-time">${time}</span>
-        </div>
-        <div class="wa-chat-item-body">
-          <span class="wa-chat-last-msg">${lastMsg}</span>
-          ${unread}
-        </div>
-      </div>
-    `;
-  });
-  listEl.innerHTML = html;
-}
-
-function filterChats() {
-  const q = $('#wa-chat-search').value.toLowerCase().trim();
-  const filtered = waChatsList.filter(c => {
-    const name = (c.name || '').toLowerCase();
-    const jid = (c.id || '').toLowerCase();
-    return name.includes(q) || jid.includes(q);
-  });
-  renderChatsList(filtered);
-}
-
-function selectWhatsAppChat(jid, name, phoneNumber) {
-  waActiveJid = jid;
-  lastActiveChatMsgCount = 0;
-  lastActiveChatMsgId = '';
-  
-  // Highlight active chat card
-  $$('.wa-chat-item').forEach(item => {
-    const onclickVal = item.getAttribute('onclick') || '';
-    item.classList.toggle('active', onclickVal.includes(jid));
-  });
-  
-  $('#wa-active-chat-name').textContent = name;
-  $('#wa-active-chat-phone').textContent = phoneNumber || jid.split('@')[0];
-  $('#wa-delete-chat-btn').style.display = 'block';
-  $('#wa-message-input-bar').style.display = 'flex';
-  if ($('#wa-rename-btn')) $('#wa-rename-btn').style.display = 'inline-block';
-  if ($('#wa-popup-btn')) $('#wa-popup-btn').style.display = 'inline-block';
-  
-  // Clear unread locally and update badge
-  const chatObj = waChatsList.find(c => c.id === jid);
-  if (chatObj) {
-    chatObj.unreadCount = 0;
-  }
-  renderChatsList(waChatsList);
-  updateWhatsAppUnreadBadge();
-  
-  const historyEl = $('#wa-messages-history');
-  historyEl.innerHTML = `
-    <div style="flex:1; display:flex; align-items:center; justify-content:center;">
-      <div class="loading" style="font-size:0.9rem; font-family:var(--font-header);">CARGANDO MENSAJES...</div>
-    </div>
-  `;
-  
-  loadActiveChatMessages();
-  
-  if (waMessagesInterval) clearInterval(waMessagesInterval);
-  waMessagesInterval = setInterval(() => {
-    if (currentSection === 'whatsapp' && waActiveJid === jid) {
-      loadActiveChatMessages();
-    }
-  }, 3000);
-}
-
-async function loadActiveChatMessages() {
-  if (!waActiveJid || isLoadingMessages) return;
-  isLoadingMessages = true;
-  try {
-    const data = await api(`/whatsapp/messages?jid=${encodeURIComponent(waActiveJid)}`);
-    const messages = Array.isArray(data) ? data : (data.messages || []);
-    
-    // Sort chronological
-    messages.sort((a, b) => {
-      const tsA = a.messageTimestamp || 0;
-      const tsB = b.messageTimestamp || 0;
-      return tsA - tsB;
-    });
-
-    // Avoid DOM redraw if message count and last message ID are identical (preserves playing audio)
-    const lastMsg = messages[messages.length - 1];
-    const lastId = lastMsg ? lastMsg.key.id : '';
-    if (messages.length === lastActiveChatMsgCount && lastId === lastActiveChatMsgId) {
-      isLoadingMessages = false;
-      return;
-    }
-    lastActiveChatMsgCount = messages.length;
-    lastActiveChatMsgId = lastId;
-    
-    const historyEl = $('#wa-messages-history');
-    
-    // Auto-scroll logic (scroll to bottom if user is close to bottom)
-    const shouldScroll = historyEl.scrollHeight - historyEl.scrollTop <= historyEl.clientHeight + 80;
-    
-    const deletedTime = parseInt(localStorage.getItem('wa-deleted-' + waActiveJid) || '0');
-    let html = '';
-    messages.forEach(msg => {
-      const msgTime = Number(msg.messageTimestamp || 0);
-      if (deletedTime === 0 || msgTime > deletedTime) {
-        html += renderWhatsAppMessage(msg);
-      }
-    });
-    
-    if (!html) {
-      html = `
-        <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.85rem;">
-          No hay mensajes en esta conversación
-        </div>
-      `;
-    }
-    
-    historyEl.innerHTML = html;
-    
-    if (shouldScroll) {
-      historyEl.scrollTop = historyEl.scrollHeight;
-    }
-  } catch (e) {
-    console.error("Error loading messages:", e);
-  } finally {
-    isLoadingMessages = false;
-  }
-}
-
-async function sendWhatsAppMessage() {
-  const inputEl = $('#wa-message-input');
-  const text = inputEl.value.trim();
-  if (!text || !waActiveJid) return;
-  
-  inputEl.value = '';
-  
-  // Optimistic UI update
-  const historyEl = $('#wa-messages-history');
-  const tempMsg = {
-    key: { fromMe: true },
-    message: { conversation: text },
-    messageTimestamp: Math.floor(Date.now() / 1000)
-  };
-  
-  if (historyEl.querySelector('.loading') || historyEl.textContent.includes('No hay mensajes')) {
-    historyEl.innerHTML = '';
-  }
-  
-  historyEl.innerHTML += renderWhatsAppMessage(tempMsg);
-  historyEl.scrollTop = historyEl.scrollHeight;
-  
-  try {
-    await api('/whatsapp/send', {
-      method: 'POST',
-      body: JSON.stringify({ number: waActiveJid, text: text })
-    });
-    loadActiveChatMessages();
-  } catch (e) {
-    toast('ERROR AL ENVIAR: ' + e.message, 'error');
-  }
-}
-
-function getWhatsAppLastMessage(chat) {
-  if (!chat) return '';
-  const lm = chat.lastMessage;
-  if (!lm) return '';
-  if (typeof lm === 'string') return lm;
-  if (typeof lm === 'object') {
-    const msg = lm.message;
-    if (msg) {
-      if (msg.conversation) return msg.conversation;
-      if (msg.extendedTextMessage) return msg.extendedTextMessage.text;
-      if (msg.imageMessage) return '📷 Imagen';
-      if (msg.videoMessage) return '🎥 Video';
-      if (msg.audioMessage) return '🎵 Audio';
-      if (msg.documentMessage) return '📄 Documento';
-    }
-  }
-  return '';
-}
-
-function formatWhatsAppTime(ts) {
-  if (!ts) return '';
-  let date;
-  if (ts < 10000000000) {
-    date = new Date(ts * 1000);
-  } else {
-    date = new Date(ts);
-  }
-  const h = String(date.getHours()).padStart(2, '0');
-  const m = String(date.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function renderWhatsAppMessage(msg) {
-  let htmlContent = '';
-  const fromMe = msg.key ? msg.key.fromMe : false;
-  const bubbleClass = fromMe ? 'wa-message-outgoing' : 'wa-message-incoming';
-  const jid = msg.key?.remoteJid || '';
-  const msgId = msg.key?.id || '';
-
-  if (msg.message) {
-    if (msg.message.conversation) {
-      const escText = msg.message.conversation.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      htmlContent = `<div class="wa-message-content" style="white-space: pre-wrap;">${escText}</div>`;
-    } else if (msg.message.extendedTextMessage) {
-      const escText = msg.message.extendedTextMessage.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      htmlContent = `<div class="wa-message-content" style="white-space: pre-wrap;">${escText}</div>`;
-    } else if (msg.message.imageMessage) {
-      const caption = msg.message.imageMessage.caption || '';
-      const escCaption = caption ? `<div style="margin-top:5px; font-size:0.8rem; white-space:pre-wrap;">${caption.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>` : '';
-      htmlContent = `
-        <div class="wa-message-media-img" style="margin-bottom: 2px;">
-          <img src="/static/whatsapp_media/${msgId}.jpg" 
-               onerror="lazyLoadWhatsAppMedia('${jid}', '${msgId}', 'image', this)" 
-               alt="Cargando imagen..." 
-               style="max-width: 280px; max-height: 280px; border-radius: 6px; display: block;" />
-        </div>
-        ${escCaption}
-      `;
-    } else if (msg.message.audioMessage) {
-      htmlContent = `
-        <div class="wa-message-media-audio" style="margin-bottom: 2px; display:flex; align-items:center; gap:8px;">
-          <audio controls src="/static/whatsapp_media/${msgId}.ogg" 
-                 onerror="lazyLoadWhatsAppMedia('${jid}', '${msgId}', 'audio', this)" 
-                 style="max-width: 240px; height: 32px;">
-          </audio>
-        </div>
-      `;
-    } else if (msg.message.videoMessage) {
-      htmlContent = `<div class="wa-message-content" style="color:var(--text-muted); font-style:italic;">🎥 [Video no soportado]</div>`;
-    } else if (msg.message.documentMessage) {
-      htmlContent = `<div class="wa-message-content" style="color:var(--text-muted); font-style:italic;">📄 [Documento no soportado]</div>`;
-    }
-  } else if (msg.content) {
-    const escText = msg.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    htmlContent = `<div class="wa-message-content" style="white-space: pre-wrap;">${escText}</div>`;
-  }
-
-  if (!htmlContent) return '';
-
-  const time = formatWhatsAppTime(msg.messageTimestamp);
-  return `
-    <div class="wa-message-bubble ${bubbleClass}" style="max-width: 75%;">
-      ${htmlContent}
-      <span class="wa-message-time" style="display:block; text-align:right;">${time}</span>
-    </div>
-  `;
-}
-
-function closeRenameModal() {
-  $('#modal-rename').classList.remove('open');
-}
-
-function promptRenameContact() {
-  if (!waActiveJid) return;
-  const currentName = $('#wa-active-chat-name').textContent;
-  const inputEl = $('#rename-contact-input');
-  if (inputEl) {
-    inputEl.value = currentName;
-  }
-  $('#modal-rename').classList.add('open');
-  setTimeout(() => inputEl.focus(), 100);
-}
-
-async function submitRenameContact() {
-  if (!waActiveJid) return;
-  const newName = $('#rename-contact-input').value.trim();
-  closeRenameModal();
-  
-  try {
-    const res = await api('/whatsapp/rename', {
-      method: 'POST',
-      body: JSON.stringify({ jid: waActiveJid, name: newName })
-    });
-    
-    if (res.success) {
-      toast("CONTACTO RENOMBRADO", "success");
-      const displayName = newName || waActiveJid.split('@')[0];
-      $('#wa-active-chat-name').textContent = displayName;
-      loadWhatsAppChats();
-    } else {
-      toast("ERROR AL RENOMBRAR", "error");
-    }
-  } catch (e) {
-    toast("ERROR AL RENOMBRAR: " + e.message, "error");
-  }
-}
-
-let lastKnownUnreadCount = 0;
-let lastKnownChatUnreads = null;
-
-function showWhatsAppNotification(chat) {
-  const c = $('#toast-container');
-  if (!c) return;
-  
-  const existingId = 'wa-toast-' + chat.id.replace(/[^a-zA-Z0-9]/g, '-');
-  const existing = $('#' + existingId);
-  if (existing) return;
-  
-  const name = chat.name || chat.phoneNumber || chat.id.split('@')[0];
-  const t = document.createElement('div');
-  t.id = existingId;
-  t.className = 'toast';
-  t.style.display = 'flex';
-  t.style.justifyContent = 'space-between';
-  t.style.alignItems = 'center';
-  t.style.gap = '12px';
-  t.style.pointerEvents = 'auto';
-  t.style.borderColor = 'var(--success)';
-  t.style.boxShadow = '0 4px 15px rgba(46, 204, 113, 0.15)';
-  
-  t.innerHTML = `
-    <div style="flex:1; min-width: 0; text-align: left;">
-      <span style="display:block; font-weight:700; color:var(--text-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Mensaje de ${name}</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-      <button class="btn-ver btn-ghost" style="
-        padding: 4px 10px;
-        font-size: 0.75rem;
-        font-family: var(--font-mono);
-        font-weight: 700;
-        color: var(--success);
-        border: 1px solid rgba(46, 204, 113, 0.4);
-        border-radius: 4px;
-        cursor: pointer;
-        background: rgba(46, 204, 113, 0.05);
-        transition: all 0.2s;
-      " onmouseover="this.style.background='rgba(46, 204, 113, 0.15)'" onmouseout="this.style.background='rgba(46, 204, 113, 0.05)'">
-        VER
-      </button>
-      <button class="btn-cerrar btn-ghost" style="
-        padding: 4px 8px;
-        font-size: 0.75rem;
-        font-family: var(--font-mono);
-        font-weight: 700;
-        color: var(--text-light);
-        border: 1px solid var(--bg-cool-gray);
-        border-radius: 4px;
-        cursor: pointer;
-        background: transparent;
-        transition: all 0.2s;
-      " onmouseover="this.style.background='var(--bg-off-white)'; this.style.color='var(--accent-red)'" onmouseout="this.style.background='transparent'; this.style.color='var(--text-light)'">
-        ✕
-      </button>
-    </div>
-  `;
-  
-  const verBtn = t.querySelector('.btn-ver');
-  verBtn.addEventListener('click', () => {
-    t.style.opacity = '0';
-    t.style.transform = 'translateY(10px) scale(0.95)';
-    setTimeout(() => t.remove(), 300);
-    goToWhatsAppChat(chat);
-  });
-  
-  const cerrarBtn = t.querySelector('.btn-cerrar');
-  cerrarBtn.addEventListener('click', () => {
-    t.style.opacity = '0';
-    t.style.transform = 'translateY(10px) scale(0.95)';
-    setTimeout(() => t.remove(), 300);
-  });
-  
-  c.appendChild(t);
-}
-
-function goToWhatsAppChat(chat) {
-  navigateTo('whatsapp');
-  const name = chat.name || chat.phoneNumber || chat.id.split('@')[0];
-  selectWhatsAppChat(chat.id, name, chat.phoneNumber || '');
-}
-
-async function updateWhatsAppUnreadBadge(providedChats = null) {
-  try {
-    let chats = providedChats;
-    if (!chats) {
-      const data = await api('/whatsapp/chats');
-      chats = Array.isArray(data) ? data : (data.chats || []);
-    }
-    
-    const isFirstCheck = (lastKnownChatUnreads === null);
-    if (isFirstCheck) {
-      lastKnownChatUnreads = {};
-    }
-    
-    let totalUnread = 0;
-    chats.forEach(c => {
-      const currentUnread = c.unreadCount || 0;
-      const prevUnread = lastKnownChatUnreads[c.id] || 0;
-      
-      if (!isFirstCheck && currentUnread > prevUnread) {
-        if (!(currentSection === 'whatsapp' && waActiveJid === c.id)) {
-          showWhatsAppNotification(c);
-        }
-      }
-      lastKnownChatUnreads[c.id] = currentUnread;
-      
-      if (currentSection !== 'whatsapp' || waActiveJid !== c.id) {
-        totalUnread += currentUnread;
-      }
-    });
-    
-    if (totalUnread > lastKnownUnreadCount) {
-      SFX.play('msg-notification');
-    }
-    lastKnownUnreadCount = totalUnread;
-    
-    const badge = $('#wa-unread-badge');
-    if (badge) {
-      if (totalUnread > 0) {
-        badge.style.display = 'inline-block';
-        badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-        badge.style.width = 'auto';
-        badge.style.height = 'auto';
-        badge.style.padding = '2px 6px';
-        badge.style.borderRadius = '10px';
-        badge.style.fontSize = '0.7rem';
-        badge.style.color = '#fff';
-        badge.style.fontWeight = 'bold';
-        badge.style.lineHeight = '1';
-      } else {
-        badge.style.display = 'none';
-      }
-    }
-  } catch (e) {
-    const badge = $('#wa-unread-badge');
-    if (badge) badge.style.display = 'none';
-  }
-}
-
-async function markAllWhatsAppAsRead() {
-  const unreadChats = waChatsList.filter(c => c.unreadCount > 0);
-  if (unreadChats.length === 0) {
-    toast("NO HAY MENSAJES SIN LEER", "info");
-    return;
-  }
-  
-  toast("MARCANDO COMO LEÍDO...", "info");
-  
-  try {
-    for (const c of unreadChats) {
-      await api(`/whatsapp/messages?jid=${encodeURIComponent(c.id)}`);
-      c.unreadCount = 0;
-    }
-    
-    renderChatsList(waChatsList);
-    updateWhatsAppUnreadBadge();
-    toast("TODOS MARCADOS COMO LEÍDO", "success");
-  } catch (e) {
-    toast("ERROR AL MARCAR: " + e.message, "error");
-  }
-}
-
-function toggleMuteSystemSounds() {
-  const chk = $('#cfg-mute-system-sounds');
-  if (chk) {
-    localStorage.setItem('mute-system-sounds', chk.checked);
-  }
-}
-
-function deleteActiveChat() {
-  if (!waActiveJid) return;
-  showConfirm("Eliminar Chat", "¿Estás seguro de que deseas ocultar este chat? La conversación se borrará de esta vista hasta que llegue un nuevo mensaje.", () => {
-    const now = Math.floor(Date.now() / 1000);
-    localStorage.setItem('wa-deleted-' + waActiveJid, now);
-    
-    // Clear active chat view
-    waActiveJid = null;
-    $('#wa-active-chat-name').textContent = 'Selecciona un chat';
-    $('#wa-active-chat-phone').textContent = 'para comenzar a chatear';
-    $('#wa-delete-chat-btn').style.display = 'none';
-    $('#wa-message-input-bar').style.display = 'none';
-    $('#wa-rename-btn').style.display = 'none';
-    if ($('#wa-popup-btn')) $('#wa-popup-btn').style.display = 'none';
-    $('#wa-messages-history').innerHTML = `
-      <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.9rem;">
-        No hay chat seleccionado
-    </div>
-    `;
-    
-    loadWhatsAppChats();
-    toast("CHAT ELIMINADO", "success");
-  });
-}
-
-// ── CHAT POPUP / NOTA DE PEDIDO ──────────────────────────────────────────────
-let _chatPopupActive = false;
-let pinnedChatForOrder = null;
-
-function pinChatForNextOrder() {
-  if (!waActiveJid) return;
-  const name = $('#wa-active-chat-name').textContent;
-  const phone = $('#wa-active-chat-phone').textContent;
-  pinnedChatForOrder = {
-    jid: waActiveJid,
-    name: name,
-    phone: phone
-  };
-  toast("CHAT GUARDADO PARA PRÓXIMO PEDIDO", "success");
-}
-
-function openChatPopup(jid, name, phoneNumber) {
-  // Remove existing popup
-  const existing = $('#chat-popup-note');
-  if (existing) existing.remove();
-
-  const popup = document.createElement('div');
-  popup.id = 'chat-popup-note';
-  popup.innerHTML = `
-    <div id="chat-popup-note-inner">
-      <div id="chat-popup-note-header">
-        <div>
-          <span id="chat-popup-note-name">${name}</span>
-          <span id="chat-popup-note-phone">${phoneNumber || ''}</span>
-        </div>
-        <button onclick="closeChatPopup()" title="Cerrar">✕</button>
-      </div>
-      <div id="chat-popup-note-messages">Cargando...</div>
-    </div>
-  `;
-  document.body.appendChild(popup);
-  _chatPopupActive = true;
-
-  // Load messages
-  fetch(`/api/whatsapp/messages?jid=${encodeURIComponent(jid)}&limit=40`)
-    .then(r => r.json())
-    .then(data => {
-      let msgs = (data.messages || data || []);
-      
-      // Sort chronological (oldest first, newest last)
-      msgs.sort((a, b) => {
-        const tsA = a.messageTimestamp || 0;
-        const tsB = b.messageTimestamp || 0;
-        return tsA - tsB;
-      });
-
-      const msgsEl = $('#chat-popup-note-messages');
-      if (!msgsEl) return;
-      if (!msgs.length) { msgsEl.innerHTML = '<div class="cpn-empty">Sin mensajes.</div>'; return; }
-      msgsEl.innerHTML = msgs.map(m => {
-        const fromMe = m.key?.fromMe;
-        const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp)*1000).toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'}) : '';
-        const mId = m.key?.id || '';
-        const j = m.key?.remoteJid || '';
-
-        let contentHtml = '';
-        if (m.message) {
-          if (m.message.conversation) {
-            contentHtml = `<span class="cpn-text">${m.message.conversation.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
-          } else if (m.message.extendedTextMessage) {
-            contentHtml = `<span class="cpn-text">${m.message.extendedTextMessage.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
-          } else if (m.message.imageMessage) {
-            const cap = m.message.imageMessage.caption || '';
-            contentHtml = `
-              <img src="/static/whatsapp_media/${mId}.jpg" 
-                   onerror="lazyLoadWhatsAppMedia('${j}', '${mId}', 'image', this)" 
-                   style="max-width:100%; max-height:150px; border-radius:4px; margin-bottom:2px; display:block;" />
-              ${cap ? `<span class="cpn-text" style="font-size:0.72rem;display:block;">${cap.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>` : ''}
-            `;
-          } else if (m.message.audioMessage) {
-            contentHtml = `
-              <audio controls src="/static/whatsapp_media/${mId}.ogg" 
-                     onerror="lazyLoadWhatsAppMedia('${j}', '${mId}', 'audio', this)" 
-                     style="max-width:100%; height:28px; margin-bottom:2px;">
-              </audio>
-            `;
-          } else {
-            contentHtml = `<span class="cpn-text" style="font-style:italic; opacity:0.6;">(media no soportado)</span>`;
-          }
-        } else if (m.content) {
-          contentHtml = `<span class="cpn-text">${m.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
-        }
-        
-        if (!contentHtml) return '';
-        
-        return `<div class="cpn-msg ${fromMe ? 'cpn-out' : 'cpn-in'}">
-          ${contentHtml}
-          <span class="cpn-time">${ts}</span>
-        </div>`;
-      }).join('');
-      msgsEl.scrollTop = msgsEl.scrollHeight;
-    })
-    .catch(() => {
-      const msgsEl = $('#chat-popup-note-messages');
-      if (msgsEl) msgsEl.innerHTML = '<div class="cpn-empty">Error al cargar mensajes.</div>';
-    });
-}
-
-function closeChatPopup() {
-  const p = $('#chat-popup-note');
-  if (p) p.remove();
-  _chatPopupActive = false;
-  pinnedChatForOrder = null;
-}
-
-// ── LAZY LOAD WHATSAPP MEDIA ─────────────────────────────────────────────────
-function lazyLoadWhatsAppMedia(jid, msgId, type, element) {
-  element.onerror = null; // Prevent infinite loop
-  
-  // Show a loading text or disable controls
-  if (type === 'image') {
-    element.alt = "Descargando imagen...";
-  }
-
-  fetch(`/api/whatsapp/download_media?jid=${encodeURIComponent(jid)}&msgId=${encodeURIComponent(msgId)}&type=${type}`)
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        // Cache bust and set source
-        const ext = type === 'image' ? 'jpg' : 'ogg';
-        element.src = `/static/whatsapp_media/${msgId}.${ext}?t=${Date.now()}`;
-      } else {
-        if (type === 'image') element.alt = "No se pudo descargar la imagen";
-      }
-    })
-    .catch(() => {
-      if (type === 'image') element.alt = "Error al descargar";
-    });
-}
-
-// ── LIMPIAR MULTIMEDIA MANUAL ────────────────────────────────────────────────
-async function clearWhatsAppMedia() {
-  showConfirm("Limpiar Multimedia", "¿Estás seguro de que quieres eliminar todas las imágenes y audios locales de WhatsApp para liberar espacio?", async () => {
-    try {
-      const res = await api('/whatsapp/clear_media', { method: 'POST' });
-      if (res.success) {
-        toast("MULTIMEDIA LIMPIADA CON ÉXITO", "success");
-      } else {
-        toast("ERROR AL LIMPIAR: " + (res.error || "Desconocido"), "error");
-      }
-    } catch (e) {
-      toast("ERROR: " + e.message, "error");
-    }
-  });
-}
+// ── WHATSAPP INTEGRATION REMOVED ──
 
 // ── BORRAR DATOS MODAL & HOLD LOGIC ──────────────────────────────────────────
 let holdTimer = null;
@@ -5492,7 +4645,6 @@ function openBorrarDatosModal() {
   const modal = $('#modal-borrar-datos');
   if (modal) {
     modal.style.display = 'flex';
-    $('#del-media').checked = false;
     $('#del-catalogo').checked = false;
     $('#del-pedidos').checked = false;
     
@@ -5518,11 +4670,10 @@ function initHoldButton() {
   
   const startHold = (e) => {
     e.preventDefault();
-    const delMedia = $('#del-media').checked;
     const delCatalog = $('#del-catalogo').checked;
     const delPedidos = $('#del-pedidos').checked;
     
-    if (!delMedia && !delCatalog && !delPedidos) {
+    if (!delCatalog && !delPedidos) {
       toast('SELECCIONÁ AL MENOS UNA OPCIÓN', 'error');
       return;
     }
@@ -5568,7 +4719,6 @@ function initHoldButton() {
 }
 
 async function executeDataDeletion() {
-  const delMedia = $('#del-media').checked;
   const delCatalog = $('#del-catalogo').checked;
   const delPedidos = $('#del-pedidos').checked;
   
@@ -5579,7 +4729,6 @@ async function executeDataDeletion() {
     const res = await api('/borrar-datos', {
       method: 'POST',
       body: JSON.stringify({
-        clear_media: delMedia,
         clear_catalog: delCatalog,
         clear_orders: delPedidos
       })
@@ -5598,4 +4747,51 @@ async function executeDataDeletion() {
     toast('ERROR AL BORRAR: ' + e.message, 'error');
   }
 }
+
+// ── GLOBAL SHORTCUTS & MODAL FOCUS TRAP ──────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  // 1. Shift+Enter to submit order when order modal is open
+  if (e.key === 'Enter' && e.shiftKey) {
+    const modal = document.getElementById('modal-pedido');
+    if (modal && modal.classList.contains('open')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof variantStep !== 'undefined' && variantStep) return;
+      submitPedido();
+    }
+  }
+
+  // 2. Strict Tab focus trapping inside open modals
+  if (e.key === 'Tab') {
+    const openOverlay = Array.from(document.querySelectorAll('.modal-overlay')).find(el => {
+      return el.classList.contains('open') || window.getComputedStyle(el).display !== 'none';
+    });
+    if (openOverlay) {
+      const focusables = openOverlay.querySelectorAll('input, select, textarea, button, [tabindex="0"]');
+      const visibleFocusables = Array.from(focusables).filter(el => {
+        if (el.disabled || el.tabIndex === -1) return false;
+        return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+      });
+
+      if (visibleFocusables.length > 0) {
+        const first = visibleFocusables[0];
+        const last = visibleFocusables[visibleFocusables.length - 1];
+        const active = document.activeElement;
+
+        if (!openOverlay.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      } else {
+        e.preventDefault();
+      }
+    }
+  }
+});
 

@@ -541,7 +541,7 @@ def manage_config():
     if "config" not in data:
         data["config"] = {}
         
-    for k in ["nombre_negocio", "direccion", "telefono", "instagram", "reiniciar_stock_diariamente", "whatsapp_url", "whatsapp_token", "whatsapp_instance"]:
+    for k in ["nombre_negocio", "direccion", "telefono", "instagram", "reiniciar_stock_diariamente"]:
         if k in body:
             data["config"][k] = body[k]
             
@@ -564,7 +564,7 @@ def get_stats():
         "total_pedidos": total_pedidos,
         "clientes_unicos": clientes_unicos,
         "file_size": size_str,
-        "version": "2.2"
+        "version": dm.VERSION
     })
 
 @api.route("/info/backup", methods=["GET"])
@@ -1082,284 +1082,16 @@ def get_balance():
     })
 
 
-# ── WhatsApp Evolution API Proxy ──────────────────────────────────────────────
 
-def _evolution_api_call(method, path, body=None):
-    import urllib.request
-    import urllib.error
-    import json
-    
-    data_store = dm.get_data()
-    config = data_store.get("config", {})
-    url = config.get("whatsapp_url", "").strip().rstrip("/")
-    token = config.get("whatsapp_token", "").strip()
-    
-    if not url or not token:
-        return {"error": "WhatsApp no configurado. Configure en Opciones."}, 400
-        
-    full_url = f"{url}{path}"
-    headers = {
-        "Content-Type": "application/json",
-        "apikey": token
-    }
-    
-    req_data = None
-    if body is not None:
-        req_data = json.dumps(body).encode("utf-8")
-        
-    req = urllib.request.Request(full_url, data=req_data, headers=headers, method=method)
-    
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            res_data = response.read().decode("utf-8")
-            if res_data:
-                return json.loads(res_data), response.status
-            return {}, response.status
-    except urllib.error.HTTPError as e:
-        try:
-            err_data = e.read().decode("utf-8")
-            return json.loads(err_data), e.code
-        except Exception:
-            return {"error": f"Error de API: {e.code} {e.reason}"}, e.code
-    except Exception as e:
-        return {"error": f"Error de conexión: {str(e)}"}, 500
-
-
-@api.route("/whatsapp/status", methods=["GET"])
-def whatsapp_status():
-    data_store = dm.get_data()
-    config = data_store.get("config", {})
-    
-    # Check configuration first before making any API call
-    url = config.get("whatsapp_url", "").strip().rstrip("/")
-    token = config.get("whatsapp_token", "").strip()
-    if not url or not token:
-        return jsonify({"error": "no_configurado", "message": "WhatsApp no configurado. Configure en Información."}), 400
-    
-    instance = config.get("whatsapp_instance", "laextra").strip()
-    
-    # Check connectionState
-    res, status_code = _evolution_api_call("GET", f"/instance/connectionState/{instance}")
-    
-    # If 404, the instance doesn't exist. Try creating it.
-    if status_code == 404:
-        create_res, create_status = _evolution_api_call("POST", "/instance/create", {
-            "instanceName": instance,
-            "qrcode": True
-        })
-        if create_status not in (200, 201):
-            return jsonify({
-                "connected": False,
-                "state": "close",
-                "qr": None,
-                "message": "Iniciando servicio de WhatsApp..."
-            })
-        # Re-check state
-        res, status_code = _evolution_api_call("GET", f"/instance/connectionState/{instance}")
-        
-    if status_code != 200:
-        return jsonify({
-            "connected": False,
-            "state": "close",
-            "qr": None,
-            "message": "Servicio local de WhatsApp reconectando..."
-        })
-        
-    connection_state = res.get("instance", {}).get("state")
-    
-    if connection_state == "open":
-        return jsonify({
-            "connected": True,
-            "state": connection_state
-        })
-    else:
-        # Fetch QR code
-        qr_res, qr_status = _evolution_api_call("GET", f"/instance/connect/{instance}")
-        if qr_status != 200:
-            return jsonify({
-                "connected": False,
-                "state": connection_state,
-                "qr": None,
-                "message": qr_res.get("error") or "Generando código QR..."
-            })
-            
-        return jsonify({
-            "connected": False,
-            "state": connection_state,
-            "qr": qr_res.get("base64") or qr_res.get("code")
-        })
-
-
-@api.route("/whatsapp/chats", methods=["GET"])
-def whatsapp_chats():
-    data_store = dm.get_data()
-    config = data_store.get("config", {})
-    instance = config.get("whatsapp_instance", "laextra").strip()
-    
-    res, status_code = _evolution_api_call("POST", f"/chat/findChats/{instance}", {})
-    if status_code != 200:
-        return jsonify({"error": "Error al buscar chats", "details": res}), status_code
-        
-    # Apply custom name overrides
-    whatsapp_names = data_store.get("whatsapp_names", {})
-    if isinstance(res, list):
-        for chat in res:
-            jid = chat.get("id")
-            if jid in whatsapp_names:
-                chat["name"] = whatsapp_names[jid]
-                
-    return jsonify(res)
-
-
-@api.route("/whatsapp/rename", methods=["POST"])
-def whatsapp_rename():
-    body = request.get_json() or {}
-    jid = body.get("jid")
-    new_name = body.get("name", "").strip()
-    
-    if not jid:
-        return jsonify({"error": "Se requiere el parámetro jid"}), 400
-        
-    data_store = dm.get_data()
-    if "whatsapp_names" not in data_store:
-        data_store["whatsapp_names"] = {}
-        
-    if new_name:
-        data_store["whatsapp_names"][jid] = new_name
-    else:
-        # If new_name is empty, remove the override
-        data_store["whatsapp_names"].pop(jid, None)
-        
-    dm.save_data(data_store)
-    return jsonify({"success": True, "jid": jid, "name": new_name})
-
-
-@api.route("/whatsapp/messages", methods=["GET"])
-def whatsapp_messages():
-    jid = request.args.get("jid")
-    if not jid:
-        return jsonify({"error": "Se requiere el parámetro jid"}), 400
-        
-    data_store = dm.get_data()
-    config = data_store.get("config", {})
-    instance = config.get("whatsapp_instance", "laextra").strip()
-    
-    body = {
-        "where": {
-            "key": {
-                "remoteJid": jid
-            }
-        },
-        "limit": 50
-    }
-    
-    res, status_code = _evolution_api_call("POST", f"/chat/findMessages/{instance}", body)
-    if status_code != 200:
-        return jsonify({"error": "Error al buscar mensajes", "details": res}), status_code
-        
-    return jsonify(res)
-
-
-@api.route("/whatsapp/send", methods=["POST"])
-def whatsapp_send():
-    body = request.get_json() or {}
-    number = body.get("number")
-    text = body.get("text")
-    
-    if not number or not text:
-        return jsonify({"error": "Faltan parámetros 'number' o 'text'"}), 400
-        
-    data_store = dm.get_data()
-    config = data_store.get("config", {})
-    instance = config.get("whatsapp_instance", "laextra").strip()
-    
-    payload = {
-        "number": number,
-        "text": text,
-        "delay": 1200,
-        "linkPreview": True
-    }
-    
-    res, status_code = _evolution_api_call("POST", f"/message/sendText/{instance}", payload)
-    if status_code not in (200, 201):
-        return jsonify({"error": "Error al enviar mensaje", "details": res}), status_code
-        
-    return jsonify(res)
-
-
-@api.route("/whatsapp/download_media", methods=["GET"])
-def whatsapp_download_media():
-    jid = request.args.get("jid")
-    msg_id = request.args.get("msgId")
-    media_type = request.args.get("type")
-    
-    if not jid or not msg_id or not media_type:
-        return jsonify({"error": "Faltan parámetros 'jid', 'msgId' o 'type'"}), 400
-        
-    data_store = dm.get_data()
-    config = data_store.get("config", {})
-    instance = config.get("whatsapp_instance", "laextra").strip()
-    
-    payload = {
-        "jid": jid,
-        "msgId": msg_id,
-        "type": media_type
-    }
-    
-    res, status_code = _evolution_api_call("POST", f"/chat/downloadMedia/{instance}", payload)
-    if status_code != 200:
-        return jsonify({"error": "Error al descargar multimedia", "details": res}), status_code
-        
-    return jsonify(res)
-
-
-@api.route("/whatsapp/clear_media", methods=["POST"])
-def whatsapp_clear_media():
-    import os
-    import shutil
-    media_dir = os.path.join(api.root_path or os.path.dirname(os.path.abspath(__file__)), "static", "whatsapp_media")
-    if os.path.exists(media_dir):
-        try:
-            for filename in os.listdir(media_dir):
-                file_path = os.path.join(media_dir, filename)
-                try:
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                except Exception as e:
-                    print(f'Failed to delete {file_path}. Reason: {e}')
-            return jsonify({"success": True, "message": "Carpeta whatsapp_media limpiada con éxito."})
-        except Exception as e:
-            return jsonify({"error": f"Error al limpiar multimedia: {str(e)}"}), 500
-    return jsonify({"success": True, "message": "La carpeta no existe"})
 
 
 @api.route("/borrar-datos", methods=["POST"])
 def borrar_datos():
     body = request.get_json() or {}
-    clear_media = body.get("clear_media", False)
     clear_catalog = body.get("clear_catalog", False)
     clear_orders = body.get("clear_orders", False)
     
     deleted_things = []
-    
-    if clear_media:
-        import shutil
-        media_dir = os.path.join(api.root_path or os.path.dirname(os.path.abspath(__file__)), "static", "whatsapp_media")
-        if os.path.exists(media_dir):
-            try:
-                for filename in os.listdir(media_dir):
-                    file_path = os.path.join(media_dir, filename)
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                deleted_things.append("multimedia_whatsapp")
-            except Exception as e:
-                return jsonify({"error": f"Error al limpiar multimedia WA: {str(e)}"}), 500
-        else:
-            deleted_things.append("multimedia_whatsapp")
             
     data = dm.get_data()
     

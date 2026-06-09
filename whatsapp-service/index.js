@@ -74,7 +74,7 @@ async function connectToWhatsApp() {
     auth: state,
     logger,
     printQRInTerminal: true,
-    browser: ['Chrome', 'Windows', '110.0.5481.177']
+    browser: ['Windows', 'Chrome', '120.0.0.0']
   });
   
   store.bind(sock.ev);
@@ -97,7 +97,7 @@ async function connectToWhatsApp() {
       currentQr = null;
       console.log('Last disconnect error details:', lastDisconnect?.error);
       const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.badSession;
       console.log(`Connection closed. Logged out: ${isLoggedOut}, Status Code: ${statusCode}`);
       
       if (isLoggedOut) {
@@ -136,6 +136,8 @@ async function connectToWhatsApp() {
   sock.ev.on('contacts.upsert', (contacts) => {
     console.log(`  [+] Contact update: synced ${contacts?.length || 0} contacts.`);
   });
+}
+
 function getSiblingJid(jid, store) {
   if (!jid) return null;
   if (jid.endsWith('@lid')) {
@@ -437,6 +439,26 @@ app.post('/chat/downloadMedia/:instance', async (req, res) => {
     console.error("Failed to download media:", e);
     res.status(500).json({ error: "Failed to download media: " + e.message });
   }
+});
+
+// 8. Graceful Shutdown
+app.post('/instance/shutdown', (req, res) => {
+  console.log("Graceful shutdown requested.");
+  res.json({ success: true });
+  setTimeout(() => {
+    if (sock) {
+      try {
+        sock.ev.removeAllListeners();
+        sock.end();
+      } catch (e) {
+        console.error("Error closing socket:", e);
+      }
+    }
+    try {
+      store.writeToFile(STORE_FILE);
+    } catch (e) {}
+    process.exit(0);
+  }, 1000);
 });
 
 // Start service

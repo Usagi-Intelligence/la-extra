@@ -64,17 +64,9 @@
           <div class="form-group" style="margin-bottom:0;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
               <input type="checkbox" id="cfg-mute-system-sounds" onchange="toggleMuteSystemSounds()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
-              Silenciar sonidos del sistema (mantiene notificaciones de WhatsApp)
+              Silenciar sonidos del sistema
             </label>
-            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: silencia sonidos de clics, hovers, etc. Solo suenan nuevos mensajes.</div>
-          </div>
-          <div class="dot-sep" style="margin-top: 15px; margin-bottom: 12px;"></div>
-          <div class="form-group" style="margin-bottom:0;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
-              <input type="checkbox" id="cfg-auto-limpiar-media" onchange="saveConfig()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
-              Auto-limpiar multimedia al iniciar la aplicación
-            </label>
-            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: elimina todas las imágenes y audios locales de WhatsApp guardados al iniciar la app para ahorrar espacio.</div>
+            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: silencia sonidos de clics, hovers, etc.</div>
           </div>
         </div>
       </div>
@@ -84,27 +76,6 @@
     <!-- Columna Derecha -->
     <div style="display:flex; flex-direction:column; gap:14px;">
       
-      <!-- CONEXIÓN WHATSAPP -->
-      <div class="panel">
-        <div class="panel-header">
-          <span>CONEXIÓN WHATSAPP (EVOLUTION API)</span>
-        </div>
-        <div class="panel-body">
-          <div class="form-group">
-            <label>URL del Servidor</label>
-            <input type="text" id="cfg-wa-url" placeholder="Ej: http://localhost:8080">
-          </div>
-          <div class="form-group">
-            <label>API Key / Token</label>
-            <input type="password" id="cfg-wa-token" placeholder="Token de Evolution API">
-          </div>
-          <div class="form-group">
-            <label>Instancia</label>
-            <input type="text" id="cfg-wa-instance" placeholder="Ej: laextra">
-          </div>
-          <button class="btn btn-primary" onclick="saveConfig()">GUARDAR CONEXIÓN</button>
-        </div>
-      </div>
 
       <!-- ACTUALIZACIÓN AUTOMÁTICA -->
       <div class="panel">

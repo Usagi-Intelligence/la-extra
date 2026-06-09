@@ -49,7 +49,7 @@ def _get_app_dir():
 BASE_DIR    = _get_app_dir()
 DATA_FILE   = os.path.join(BASE_DIR, "data.json")
 ARCHIVE_DIR = os.path.join(BASE_DIR, "archivos")
-VERSION     = "2.2"
+VERSION     = "2.6.0"
 
 DEFAULT_DATA = {
     "producto_tipos": [],
