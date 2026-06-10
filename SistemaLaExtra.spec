@@ -1,25 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 
-def get_whatsapp_datas():
-    datas = []
-    base_dir = 'whatsapp-service'
-    if not os.path.exists(base_dir):
-        return datas
-    for root, dirs, files in os.walk(base_dir):
-        if 'auth_info_baileys' in root:
-            continue
-        for file in files:
-            if file == 'baileys_store.json':
-                continue
-            full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(root, base_dir)
-            dest_dir = os.path.join('whatsapp-service', rel_path) if rel_path != '.' else 'whatsapp-service'
-            datas.append((full_path, dest_dir))
-    return datas
-
-whatsapp_datas = get_whatsapp_datas()
-all_datas = [('templates', 'templates'), ('static', 'static'), ('data.json', '.')] + whatsapp_datas
+all_datas = [('templates', 'templates'), ('static', 'static'), ('data.json', '.')]
 
 a = Analysis(
     ['app_v3.py'],

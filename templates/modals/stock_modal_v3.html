@@ -14,15 +14,21 @@
         </div>
         <div class="form-group" style="flex: 1;">
           <label>Producto *</label>
-          <select id="stock-producto-id" disabled>
+          <select id="stock-producto-id" onchange="onStockProductoChange()" disabled>
             <option value="" disabled selected>Seleccionar</option>
           </select>
         </div>
       </div>
+      <div class="form-group" id="stock-coccion-group" style="display:none; margin-top: 10px;">
+        <label>Opciones de Cocción *</label>
+        <div id="stock-coccion-checkboxes" style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
+          <!-- Checkboxes y campos de cantidad renderizados dinámicamente -->
+        </div>
+      </div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="stock-cantidad-group">
           <label>Cantidad *</label>
-          <input type="number" id="stock-cantidad" min="1" value="1">
+          <input type="number" id="stock-cantidad" min="0" step="any" value="1">
         </div>
         <div class="form-group" style="max-width:130px;">
           <label>Unidad</label>
@@ -57,7 +63,7 @@
             <option value="restar">Restar</option>
             <option value="indicar">Indicar total</option>
           </select>
-          <input type="number" id="ajuste-cantidad" min="0" placeholder="Ej: 10" style="flex: 0.8; width: 100px;">
+          <input type="number" id="ajuste-cantidad" min="0" step="any" placeholder="Ej: 10" style="flex: 0.8; width: 100px;">
         </div>
       </div>
     </div>

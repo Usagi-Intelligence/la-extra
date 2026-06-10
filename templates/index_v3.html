@@ -3,12 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LA EXTRA — Control Desk v2.2</title>
+  <title>La Extra v{{ version }}</title>
   <meta name="description" content="Sistema de gestión de pedidos — La Extra">
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
-  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('favicon') }}">
+  <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('favicon') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_v3.css') }}">
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
 </head>
 
 
@@ -23,7 +32,7 @@
     {% include 'sections/catalogo_v3.html' %}
     {% include 'sections/resumen_v3.html' %}
     {% include 'sections/gastosstock_v3.html' %}
-    {% include 'sections/whatsapp_v3.html' %}
+
     {% include 'sections/sistema_v3.html' %}
   </main>
 
@@ -55,10 +64,23 @@
 {% include 'modals/stock_modal_v3.html' %}
 {% include 'modals/gasto_modal_v3.html' %}
 {% include 'modals/stock_warning_modal_v3.html' %}
-{% include 'modals/rename_modal_v3.html' %}
+
 {% include 'modals/borrar_datos_modal_v3.html' %}
+{% include 'modals/update_config_modal_v3.html' %}
 
 <script src="{{ url_for('static', filename='js/app_v3.js') }}"></script>
+<script>
+  // Send periodic heartbeats to keep the Flask backend alive
+  (function() {
+    function sendHeartbeat() {
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }
+    // Initial heartbeat
+    sendHeartbeat();
+    // Repeat every 3 seconds
+    setInterval(sendHeartbeat, 3000);
+  })();
+</script>
 
 </body>
 </html>

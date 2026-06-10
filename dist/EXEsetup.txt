@@ -1,0 +1,11 @@
+# 1. Instalar node.js
+# 2. Agregar node a PATH (C:\Program Files\nodejs) con variables de entorno
+# 3. Listo
+
+# Ubicacion del .json de datos
+%LOCALAPPDATA%\SistemaLaExtra
+
+Whatsapp
+	- URL del Servidor: http://localhost:8080
+	- API Key: laextra
+	- Instancia: laextra

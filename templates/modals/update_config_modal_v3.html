@@ -1,0 +1,28 @@
+<!-- ═══ MODAL: Configurar Repositorio de Actualización ═══ -->
+<div class="modal-overlay" id="modal-update-config">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h2>// CONFIGURAR REPOSITORIO</h2>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div class="form-group">
+          <label>Dueño del Repositorio (GitHub Owner)</label>
+          <input type="text" id="update-cfg-owner" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--bg-cool-gray); font-family:var(--font-body); font-size:0.85rem; background:var(--bg-off-white); color:var(--text-dark); box-sizing:border-box;">
+        </div>
+        <div class="form-group">
+          <label>Nombre del Repositorio (GitHub Repo)</label>
+          <input type="text" id="update-cfg-repo" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--bg-cool-gray); font-family:var(--font-body); font-size:0.85rem; background:var(--bg-off-white); color:var(--text-dark); box-sizing:border-box;">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Contraseña de Seguridad</label>
+          <input type="password" id="update-cfg-password" placeholder="Clave en updater.py" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--bg-cool-gray); font-family:var(--font-body); font-size:0.85rem; background:var(--bg-off-white); color:var(--text-dark); box-sizing:border-box;">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeUpdateConfigModal()">CANCELAR</button>
+      <button class="btn btn-primary" onclick="submitUpdateConfig()">GUARDAR</button>
+    </div>
+  </div>
+</div>

@@ -64,17 +64,9 @@
           <div class="form-group" style="margin-bottom:0;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
               <input type="checkbox" id="cfg-mute-system-sounds" onchange="toggleMuteSystemSounds()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
-              Silenciar sonidos del sistema (mantiene notificaciones de WhatsApp)
+              Silenciar sonidos del sistema
             </label>
-            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: silencia sonidos de clics, hovers, etc. Solo suenan nuevos mensajes.</div>
-          </div>
-          <div class="dot-sep" style="margin-top: 15px; margin-bottom: 12px;"></div>
-          <div class="form-group" style="margin-bottom:0;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:var(--font-body); font-size:0.82rem; color:var(--text-dark); font-weight:600; text-transform:none; letter-spacing:0;">
-              <input type="checkbox" id="cfg-auto-limpiar-media" onchange="saveConfig()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--accent);">
-              Auto-limpiar multimedia al iniciar la aplicación
-            </label>
-            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: elimina todas las imágenes y audios locales de WhatsApp guardados al iniciar la app para ahorrar espacio.</div>
+            <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-body); margin-top:4px; margin-left:24px;">Activo: silencia sonidos de clics, hovers, etc.</div>
           </div>
         </div>
       </div>
@@ -84,25 +76,29 @@
     <!-- Columna Derecha -->
     <div style="display:flex; flex-direction:column; gap:14px;">
       
-      <!-- CONEXIÓN WHATSAPP -->
+
+      <!-- ACTUALIZACIÓN AUTOMÁTICA -->
       <div class="panel">
         <div class="panel-header">
-          <span>CONEXIÓN WHATSAPP (EVOLUTION API)</span>
+          <span>ACTUALIZACIÓN AUTOMÁTICA</span>
         </div>
         <div class="panel-body">
-          <div class="form-group">
-            <label>URL del Servidor</label>
-            <input type="text" id="cfg-wa-url" placeholder="Ej: http://localhost:8080">
+          <div style="font-family:var(--font-mono); font-size:0.82rem; display:flex; flex-direction:column; gap:8px;">
+            <div>Versión Actual: <span style="color:var(--accent); font-weight:700;" id="lbl-update-current-version">-</span></div>
+            <div>GitHub Owner: <span id="lbl-update-owner" style="color:var(--text-dark); font-weight:600;">-</span></div>
+            <div>GitHub Repo: <span id="lbl-update-repo" style="color:var(--text-dark); font-weight:600;">-</span></div>
+            
+            <div id="update-status" style="margin-top:4px; padding:6px; border:1px dashed var(--bg-cool-gray); border-radius:4px; font-size:0.75rem; text-align:center; color:var(--text-muted);">
+              Presione "BUSCAR ACTUALIZACIÓN"
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px;">
+              <button class="btn btn-sm" onclick="checkForUpdates()">BUSCAR ACTUALIZACIÓN</button>
+              <button class="btn btn-sm btn-danger" id="btn-run-update" onclick="runUpdate()" disabled>ACTUALIZAR AHORA</button>
+            </div>
+            <div class="dot-sep" style="margin-top: 8px; margin-bottom: 8px;"></div>
+            <button class="btn btn-sm" style="width:100%;" onclick="openUpdateConfigModal()">✎ CONFIGURAR REPO</button>
           </div>
-          <div class="form-group">
-            <label>API Key / Token</label>
-            <input type="password" id="cfg-wa-token" placeholder="Token de Evolution API">
-          </div>
-          <div class="form-group">
-            <label>Instancia</label>
-            <input type="text" id="cfg-wa-instance" placeholder="Ej: laextra">
-          </div>
-          <button class="btn btn-primary" onclick="saveConfig()">GUARDAR CONEXIÓN</button>
         </div>
       </div>
 

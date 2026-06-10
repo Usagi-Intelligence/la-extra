@@ -70,7 +70,7 @@ const SFX = {
         osc.frequency.setValueAtTime(587.33, t); // D5
         osc.frequency.setValueAtTime(880, t + 0.1); // A5
         
-        gain.gain.setValueAtTime(0.08, t);
+        gain.gain.setValueAtTime(0.45, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
         
         osc.start(t);
@@ -190,6 +190,68 @@ function fmtElapsed(seconds) {
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
 }
+
+function cleanVariantName(v) {
+  if (!v) return '';
+  return v.replace(/\{[^}]+\}/g, '').trim();
+}
+
+function getVariantMultiplier(varCant) {
+  if (!varCant) return 1.0;
+  const match = varCant.match(/\{([^}]+)\}/);
+  if (match) {
+    const fracStr = match[1].trim();
+    if (fracStr.includes('/')) {
+      const parts = fracStr.split('/');
+      const num = parseFloat(parts[0]);
+      const denom = parseFloat(parts[1]);
+      if (!isNaN(num) && !isNaN(denom) && denom !== 0) {
+        return num / denom;
+      }
+    } else {
+      const val = parseFloat(fracStr);
+      if (!isNaN(val)) return val;
+    }
+  }
+  return 1.0;
+}
+
+function formatStockValue(val) {
+  if (val == null) return '0';
+  const num = parseFloat(val);
+  if (isNaN(num)) return '0';
+  const integerPart = Math.floor(num);
+  const decimalPart = num - integerPart;
+  
+  let fracChar = '';
+  if (Math.abs(decimalPart - 0.5) < 0.01) {
+    fracChar = '½';
+  } else if (Math.abs(decimalPart - 0.25) < 0.01) {
+    fracChar = '¼';
+  } else if (Math.abs(decimalPart - 0.75) < 0.01) {
+    fracChar = '¾';
+  } else if (Math.abs(decimalPart - 0.333) < 0.05) {
+    fracChar = '⅓';
+  } else if (Math.abs(decimalPart - 0.666) < 0.05) {
+    fracChar = '⅔';
+  } else if (Math.abs(decimalPart - 0.125) < 0.01) {
+    fracChar = '⅛';
+  } else if (Math.abs(decimalPart - 0.375) < 0.01) {
+    fracChar = '⅜';
+  } else if (Math.abs(decimalPart - 0.625) < 0.01) {
+    fracChar = '⅝';
+  } else if (Math.abs(decimalPart - 0.875) < 0.01) {
+    fracChar = '⅞';
+  } else if (decimalPart > 0) {
+    return Number(num.toFixed(2)).toString().replace('.', ',');
+  }
+  
+  if (integerPart === 0 && fracChar !== '') {
+    return fracChar;
+  }
+  return integerPart.toString() + fracChar;
+}
+
 
 async function api(path, opts = {}) {
   const url = API + path;
@@ -338,8 +400,8 @@ function checkLowStock() {
   if (!stockData || !stockData.length) return;
   stockData.forEach(s => {
     if (s.cantidad_inicial <= 0) return;
-    const pct = s.cantidad_actual / s.cantidad_inicial;
-    if (pct <= 0.05 && s.cantidad_actual >= 0 && !_lowStockNotified.has(s.id)) {
+    const threshold = Math.max(0.10 * s.cantidad_inicial, 3);
+    if (s.cantidad_actual <= threshold && s.cantidad_actual >= 0 && !_lowStockNotified.has(s.id)) {
       _lowStockNotified.add(s.id);
       // Find tipo name from the product
       const prod = (catalogoForStock || []).find(p => p.id === s.producto_id);
@@ -354,18 +416,70 @@ function checkLowStock() {
   });
 }
 
-function getStockForProduct(productoId) {
+async function checkLowStockBackground() {
+  try {
+    stockData = await api('/stock');
+    if (!catalogoForStock || !catalogoForStock.length) {
+      catalogoForStock = await api('/productos');
+    }
+    if (!stockTipos || !stockTipos.length) {
+      stockTipos = await api('/tipos');
+    }
+    checkLowStock();
+  } catch (e) {
+    console.error("Failed to check low stock in background:", e);
+  }
+}
+
+function isProductStockSeparated(productId) {
+  const prod = (catalogoForStock || []).find(p => p.id === productId);
+  if (!prod) return false;
+  const list = (typeof stockTipos !== 'undefined' && stockTipos && stockTipos.length) ? stockTipos : ((typeof tiposData !== 'undefined') ? tiposData : []);
+  const tipo = list.find(t => t.id === prod.tipo_id);
+  return !!(tipo && tipo.separar_stock_coccion);
+}
+
+function getEffectiveStockLimit(productId, stockEntry) {
+  if (!stockEntry) return 0;
+  let limit = stockEntry.cantidad_actual;
+  const varTipo = stockEntry.var_tipo || '';
+  if (editingOrderId && originalOrderItems.length) {
+    const originalQty = originalOrderItems.reduce((sum, it) => {
+      if (it.producto_id !== productId) return sum;
+      if (isProductStockSeparated(productId)) {
+        if ((it.var_tipo || '') !== varTipo) return sum;
+      }
+      return sum + (it.cantidad * getVariantMultiplier(it.var_cantidad));
+    }, 0);
+    limit += originalQty;
+  }
+  return limit;
+}
+
+function getStockForProduct(productoId, varTipo = '') {
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, '0');
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const yyyy = today.getFullYear();
   const fechaHoy = `${dd}/${mm}/${yyyy}`;
   if (!stockData || !stockData.length) return null;
-  return stockData.find(s => s.producto_id === productoId && s.fecha === fechaHoy) || null;
+  
+  // Try matching product, date, and specific var_tipo
+  const matched = stockData.find(s => s.producto_id === productoId && s.fecha === fechaHoy && (s.var_tipo || '') === varTipo);
+  if (matched) return matched;
+  
+  // Fallback to general stock entry if specific not found
+  return stockData.find(s => s.producto_id === productoId && s.fecha === fechaHoy && (s.var_tipo || '') === '') || null;
 }
 
-function getOrderQtyForProduct(productoId) {
-  return orderItems.reduce((sum, it) => it.producto_id === productoId ? sum + it.cantidad : sum, 0);
+function getOrderQtyForProduct(productoId, varTipo = '') {
+  return orderItems.reduce((sum, it) => {
+    if (it.producto_id !== productoId) return sum;
+    if (isProductStockSeparated(productoId)) {
+      if ((it.var_tipo || '') !== varTipo) return sum;
+    }
+    return sum + (it.cantidad * getVariantMultiplier(it.var_cantidad));
+  }, 0);
 }
 
 let _stockWarningIgnoreCallback = null;
@@ -389,7 +503,6 @@ const SECTIONS = {
   catalogo:     { title: 'CATÁLOGO',       subtitle: '// Gestión de productos y categorías' },
   resumen:      { title: 'RESUMEN',        subtitle: '// Panel de finanzas' },
   gastosstock:  { title: 'STOCK',          subtitle: '// Control de stock' },
-  whatsapp:     { title: 'WHATSAPP',       subtitle: '// Mensajería y clientes' },
   sistema:      { title: 'INFORMACIÓN',    subtitle: '// Configuración' },
 };
 
@@ -419,11 +532,6 @@ function navigateTo(section) {
   const fab = $('#fab-new-order');
   if (fab) fab.style.display = section === 'pedidos' ? 'flex' : 'none';
 
-  // Clear WhatsApp intervals when leaving the section
-  if (section !== 'whatsapp') {
-    clearWhatsAppIntervals();
-  }
-
   if (section === 'pedidos') loadPedidos();
   if (section === 'catalogo') switchCatTab(currentCatTab);
   if (section === 'resumen') {
@@ -438,7 +546,6 @@ function navigateTo(section) {
   }
   if (section === 'gastosstock') loadGastosStock();
   if (section === 'sistema') loadSistema();
-  if (section === 'whatsapp') initWhatsAppSection();
 }
 
 function showSection(section) {
@@ -495,6 +602,7 @@ async function loadPedidos() {
     if (document.body.classList.contains('layout-vertical')) {
       updateSidebarTelemetry();
     }
+    checkLowStockBackground();
   } catch (e) {
     toast('SYS ERROR: ' + e.message, 'error');
   }
@@ -678,7 +786,7 @@ function showPedidoDetails(pedidoId) {
         <ul style="list-style: none; padding: 0; margin: 0; font-family: var(--font-mono) !important; font-size: 0.88rem; color: var(--text-dark); line-height: 1.5;">
           ${groups[catName].map(it => {
             const coccion = it.var_tipo ? ` - ${it.var_tipo}` : '';
-            const tamano = it.var_cantidad ? ` (${it.var_cantidad})` : '';
+            const tamano = it.var_cantidad ? ` (${cleanVariantName(it.var_cantidad)})` : '';
             return `<li style="display: flex; justify-content: space-between; margin-bottom: 4px; padding: 2px 0; font-family: var(--font-mono) !important;">
               <span style="font-family: var(--font-mono) !important;"><span style="color: var(--accent); font-weight: 700; margin-right: 6px; font-family: var(--font-mono) !important;">${it.cantidad}x</span><strong style="font-weight: 600; color: var(--text-dark); font-family: var(--font-mono) !important;">${it.nombre}</strong>${coccion}${tamano}</span>
               <span style="color: var(--text-light); font-weight: 700; font-family: var(--font-mono) !important;">${fmtMoney(it.precio * it.cantidad)}</span>
@@ -882,6 +990,7 @@ function addMinutesToRetiro(mins) {
 }
 
 let editingOrderId = null;
+let originalOrderItems = [];
 let promoItems = [];
 let currentPromoProduct = null;
 let currentPromoQty = 1;
@@ -930,11 +1039,13 @@ async function openPedidoModal(orderId = null) {
     onEnvioTipoChange();
     toggleEnvio();
     orderItems = JSON.parse(JSON.stringify(orderData.items || []));
+    originalOrderItems = JSON.parse(JSON.stringify(orderData.items || []));
     $('#ped-variant-area').style.display = 'none';
     $('#pedido-modal-title').textContent = '// EDITAR PEDIDO #' + orderId;
     $('#ped-submit-btn').textContent = 'GUARDAR CAMBIOS';
   } else {
     editingOrderId = null;
+    originalOrderItems = [];
     $('#ped-delete-btn').style.display = 'none';
     $('#ped-cliente').value = '';
     $('#ped-telefono').value = '';
@@ -962,10 +1073,6 @@ async function openPedidoModal(orderId = null) {
   $('#modal-pedido').classList.add('open');
   setTimeout(() => $('#ped-cliente').focus(), 100);
 
-  if (pinnedChatForOrder) {
-    openChatPopup(pinnedChatForOrder.jid, pinnedChatForOrder.name, pinnedChatForOrder.phone);
-  }
-
   // Silently pre-load today's stock data for insufficient stock checks
   try {
     stockData = await api('/stock');
@@ -977,8 +1084,8 @@ async function openPedidoModal(orderId = null) {
 function closePedidoModal() {
   $('#modal-pedido').classList.remove('open');
   $('#ped-search-results').classList.remove('visible');
-  closeChatPopup();
-  pinnedChatForOrder = null;
+  editingOrderId = null;
+  originalOrderItems = [];
 }
 
 function deletePedidoFromModal() {
@@ -1157,8 +1264,9 @@ async function selectProduct(product, tipo) {
       if (stockEntry) {
         const alreadyOrdered = getOrderQtyForProduct(product.id);
         const totalNeeded = alreadyOrdered + finalQty;
-        if (totalNeeded > stockEntry.cantidad_actual) {
-          const faltante = totalNeeded - stockEntry.cantidad_actual;
+        const limit = getEffectiveStockLimit(product.id, stockEntry);
+        if (totalNeeded > limit) {
+          const faltante = totalNeeded - limit;
           showStockWarning(faltante, product.nombre, () => {
             orderItems.push(newItem);
             renderOrderItems(); updateOrderTotals();
@@ -1757,10 +1865,11 @@ function showVariantSelector(product, tipo, vars, qty = 1) {
 
 function renderVariantPills(group, values) {
   const containerId = group === 'tipo' ? 'ped-variant-tipo-pills' : 'ped-variant-cant-pills';
-  $(`#${containerId}`).innerHTML = values.map(v =>
-    `<div class="variant-pill" tabindex="-1" role="button"
-       onclick="onVariantPillClick('${group}', this, '${v}')">${v}</div>`
-  ).join('');
+  $(`#${containerId}`).innerHTML = values.map(v => {
+    const displayName = group === 'cant' ? cleanVariantName(v) : v;
+    return `<div class="variant-pill" tabindex="-1" role="button"
+       onclick="onVariantPillClick('${group}', this, '${v}')">${displayName}</div>`;
+  }).join('');
 }
 
 function updateVariantStepUI() {
@@ -1982,13 +2091,14 @@ function addItemToOrder() {
     precio: price, cantidad: qty, descuento_efectivo: product.excluir_descuento_efectivo ? false : (tipo ? tipo.descuento_efectivo : false)
   };
 
-  const stockEntry = getStockForProduct(product.id);
+  const stockEntry = getStockForProduct(product.id, selectedVariantTipo);
   if (stockEntry) {
-    const alreadyOrdered = getOrderQtyForProduct(product.id);
-    const totalNeeded = alreadyOrdered + qty;
-    if (totalNeeded > stockEntry.cantidad_actual) {
-      const faltante = totalNeeded - stockEntry.cantidad_actual;
-      showStockWarning(faltante, product.nombre, () => {
+    const alreadyOrdered = getOrderQtyForProduct(product.id, selectedVariantTipo);
+    const totalNeeded = alreadyOrdered + (qty * getVariantMultiplier(selectedVariantCant));
+    const limit = getEffectiveStockLimit(product.id, stockEntry);
+    if (totalNeeded > limit) {
+      const faltante = totalNeeded - limit;
+      showStockWarning(formatStockValue(faltante), product.nombre, () => {
         orderItems.push(newItem);
         $('#ped-variant-area').style.display = 'none';
         variantStep = null;
@@ -2024,7 +2134,7 @@ function renderOrderItems() {
     return;
   }
   list.innerHTML = orderItems.map((it, i) => {
-    const variant = [it.var_tipo, it.var_cantidad].filter(Boolean).join(' · ');
+    const variant = [it.var_tipo, cleanVariantName(it.var_cantidad)].filter(Boolean).join(' · ');
     return `
       <li class="order-item">
         <span class="oi-qty">${it.cantidad}x</span>
@@ -2051,13 +2161,14 @@ function changeItemQty(index, delta) {
   // Check stock only when increasing
   if (delta > 0) {
     const item = orderItems[index];
-    const stockEntry = getStockForProduct(item.producto_id);
+    const stockEntry = getStockForProduct(item.producto_id, item.var_tipo);
     if (stockEntry) {
-      const alreadyOrdered = getOrderQtyForProduct(item.producto_id);
-      const totalNeeded = alreadyOrdered + delta;
-      if (totalNeeded > stockEntry.cantidad_actual) {
-        const faltante = totalNeeded - stockEntry.cantidad_actual;
-        showStockWarning(faltante, item.nombre, () => {
+      const alreadyOrdered = getOrderQtyForProduct(item.producto_id, item.var_tipo);
+      const totalNeeded = alreadyOrdered + (delta * getVariantMultiplier(item.var_cantidad));
+      const limit = getEffectiveStockLimit(item.producto_id, stockEntry);
+      if (totalNeeded > limit) {
+        const faltante = totalNeeded - limit;
+        showStockWarning(formatStockValue(faltante), item.nombre, () => {
           orderItems[index].cantidad = newQty;
           renderOrderItems(); updateOrderTotals();
         }, () => { /* Deshacer: don't change qty */ });
@@ -2612,6 +2723,7 @@ function openProductoModal(product = null) {
   const tipoId = product ? product.tipo_id : null;
   const precioLabel = $('#prod-precio-label');
   const precioGroup = $('#prod-precio-group');
+  const tipo = product ? (tiposData || []).find(t => t.id === tipoId) : null;
 
   if (tipoId === null) {
     $('#prod-promo-area').style.display = 'none';
@@ -2746,6 +2858,8 @@ $('#prod-tipo').addEventListener('change', function() {
     return;
   }
   const tipoId = parseInt(val);
+  const tipo = (tiposData || []).find(t => t.id === tipoId);
+
   if (tipoId === 999) {
     $('#prod-promo-area').style.display = 'block';
     $('#prod-variantes-area').style.display = 'none';
@@ -2828,7 +2942,7 @@ function renderPromoItems() {
 
     const qtyVarSelect = hasQtyVariants 
       ? `<select onchange="promoItems[${index}].var_cantidad = this.value" style="background:var(--bg-white); border: 1px solid var(--bg-cool-gray); border-radius: var(--radius);">
-          ${tipo.variantes_cantidad.map(vc => `<option value="${vc}" ${it.var_cantidad === vc ? 'selected' : ''}>${vc}</option>`).join('')}
+          ${tipo.variantes_cantidad.map(vc => `<option value="${vc}" ${it.var_cantidad === vc ? 'selected' : ''}>${cleanVariantName(vc)}</option>`).join('')}
          </select>`
       : `<span style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">—</span>`;
 
@@ -2993,6 +3107,7 @@ function selectTipo(id) {
     <div style="display:flex; flex-direction:column; gap:5px; font-size:0.82rem; margin-bottom:14px; font-family:var(--font-mono);">
       <div>Opciones de Cocción: <span style="color:${tipo.admite_variantes_tipo ? 'var(--success)' : 'var(--accent-red)'};">${tipo.admite_variantes_tipo ? 'SÍ' : 'NO'}</span></div>
       <div>Opciones de Tamaño: <span style="color:${tipo.admite_variantes_cantidad ? 'var(--success)' : 'var(--accent-red)'};">${tipo.admite_variantes_cantidad ? 'SÍ' : 'NO'}</span></div>
+      <div>Separar Stock por Cocción: <span style="color:${tipo.separar_stock_coccion ? 'var(--success)' : 'var(--accent-red)'};">${tipo.separar_stock_coccion ? 'SÍ' : 'NO'}</span></div>
       <div>Descuento Efectivo: <span style="color:${tipo.descuento_efectivo ? 'var(--success)' : 'var(--accent-red)'};">${tipo.descuento_efectivo ? 'SÍ' : 'NO'}</span></div>
     </div>
     ${tipo.admite_variantes_tipo && tipo.variantes_tipo && tipo.variantes_tipo.length ? `<div style="margin-bottom:10px;"><label>Opciones de Cocción</label><div class="variant-pills">${tipo.variantes_tipo.map(v => `<span class="variant-pill" style="cursor:default;">${v}</span>`).join('')}</div></div>` : ''}
@@ -3010,6 +3125,7 @@ function openTipoModal(tipo = null) {
   $('#tipo-nombre').value = tipo ? tipo.nombre : '';
   $('#tipo-var-tipo').checked = tipo ? tipo.admite_variantes_tipo : false;
   $('#tipo-var-cant').checked = tipo ? tipo.admite_variantes_cantidad : false;
+  $('#tipo-separar-stock-coccion').checked = tipo ? !!tipo.separar_stock_coccion : false;
   $('#tipo-desc-efectivo').checked = tipo ? tipo.descuento_efectivo : true;
   $('#tipo-vt-list').value = tipo && tipo.variantes_tipo ? tipo.variantes_tipo.join('\n') : '';
   $('#tipo-vc-list').value = tipo && tipo.variantes_cantidad ? tipo.variantes_cantidad.join('\n') : '';
@@ -3020,8 +3136,16 @@ function openTipoModal(tipo = null) {
 function closeTipoModal() { $('#modal-tipo').classList.remove('open'); }
 
 function updateTipoModalAreas() {
-  $('#tipo-vt-area').style.display = $('#tipo-var-tipo').checked ? 'block' : 'none';
+  const admiteCoccion = $('#tipo-var-tipo').checked;
+  $('#tipo-vt-area').style.display = admiteCoccion ? 'block' : 'none';
   $('#tipo-vc-area').style.display = $('#tipo-var-cant').checked ? 'block' : 'none';
+  const sepGroup = $('#tipo-separar-stock-group');
+  if (sepGroup) {
+    sepGroup.style.display = admiteCoccion ? 'block' : 'none';
+    if (!admiteCoccion) {
+      $('#tipo-separar-stock-coccion').checked = false;
+    }
+  }
 }
 $('#tipo-var-tipo').addEventListener('change', updateTipoModalAreas);
 $('#tipo-var-cant').addEventListener('change', updateTipoModalAreas);
@@ -3054,6 +3178,7 @@ async function submitTipo() {
   const body = {
     nombre, admite_variantes_tipo: $('#tipo-var-tipo').checked,
     admite_variantes_cantidad: $('#tipo-var-cant').checked, descuento_efectivo: $('#tipo-desc-efectivo').checked,
+    separar_stock_coccion: $('#tipo-separar-stock-coccion').checked,
     variantes_tipo: $('#tipo-vt-list').value.split('\n').map(s => s.trim()).filter(Boolean),
     variantes_cantidad: $('#tipo-vc-list').value.split('\n').map(s => s.trim()).filter(Boolean),
   };
@@ -3255,8 +3380,133 @@ async function loadSistema() {
         </div>
       `;
     }
+    await loadUpdatesInfo();
   } catch (e) { toast('ERROR: ' + e.message, 'error'); }
 }
+
+async function loadUpdatesInfo() {
+  try {
+    const info = await api('/updates/info');
+    const versionEl = $('#lbl-update-current-version');
+    const ownerEl = $('#lbl-update-owner');
+    const repoEl = $('#lbl-update-repo');
+    if (versionEl) versionEl.textContent = 'v' + info.current_version;
+    if (ownerEl) ownerEl.textContent = info.github_owner || 'No configurado';
+    if (repoEl) repoEl.textContent = info.github_repo || 'No configurado';
+  } catch (e) {
+    console.error('Error al cargar info de updates:', e);
+  }
+}
+
+async function checkForUpdates() {
+  const statusEl = $('#update-status');
+  const btnRun = $('#btn-run-update');
+  if (statusEl) {
+    statusEl.textContent = 'Buscando actualizaciones...';
+    statusEl.style.color = 'var(--text-dark)';
+  }
+  if (btnRun) btnRun.disabled = true;
+  
+  try {
+    const res = await api('/updates/check', { method: 'POST' });
+    if (statusEl) {
+      if (res.has_update) {
+        statusEl.innerHTML = `¡Nueva versión disponible: <strong style="color:var(--success);">v${res.latest_version}</strong>!`;
+        statusEl.style.color = 'var(--success)';
+        if (btnRun) btnRun.disabled = false;
+      } else {
+        statusEl.textContent = `Sistema al día (v${res.current_version})`;
+        statusEl.style.color = 'var(--text-muted)';
+      }
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = 'Error: ' + e.message;
+      statusEl.style.color = 'var(--accent-red)';
+    }
+    toast('ERROR AL BUSCAR ACTUALIZACIÓN: ' + e.message, 'error');
+  }
+}
+
+async function runUpdate() {
+  const statusEl = $('#update-status');
+  const btnRun = $('#btn-run-update');
+  if (statusEl) {
+    statusEl.textContent = 'Abriendo navegador...';
+    statusEl.style.color = 'var(--accent)';
+  }
+  if (btnRun) btnRun.disabled = true;
+  
+  try {
+    toast('ABRIENDO PÁGINA DE RELEASES...', 'success');
+    const res = await api('/updates/install', { method: 'POST' });
+    if (res.success) {
+      toast('NAVEGADOR ABIERTO CON LA DESCARGA', 'success');
+      if (statusEl) {
+        statusEl.textContent = 'Navegador abierto en la página de releases.';
+        statusEl.style.color = 'var(--success)';
+      }
+    } else {
+      toast('ERROR AL BUSCAR ACTUALIZACIÓN: ' + res.details, 'error');
+      if (statusEl) {
+        statusEl.textContent = 'Error: ' + res.details;
+        statusEl.style.color = 'var(--accent-red)';
+      }
+      if (btnRun) btnRun.disabled = false;
+    }
+  } catch (e) {
+    toast('ERROR: ' + e.message, 'error');
+    if (statusEl) {
+      statusEl.textContent = 'Error: ' + e.message;
+      statusEl.style.color = 'var(--accent-red)';
+    }
+    if (btnRun) btnRun.disabled = false;
+  }
+}
+
+function openUpdateConfigModal() {
+  const ownerEl = $('#lbl-update-owner');
+  const repoEl = $('#lbl-update-repo');
+  const owner = ownerEl ? ownerEl.textContent : '';
+  const repo = repoEl ? repoEl.textContent : '';
+  $('#update-cfg-owner').value = owner === 'No configurado' ? '' : owner;
+  $('#update-cfg-repo').value = repo === 'No configurado' ? '' : repo;
+  $('#update-cfg-password').value = '';
+  $('#modal-update-config').classList.add('open');
+}
+
+function closeUpdateConfigModal() {
+  $('#modal-update-config').classList.remove('open');
+}
+
+async function submitUpdateConfig() {
+  const owner = $('#update-cfg-owner').value.trim();
+  const repo = $('#update-cfg-repo').value.trim();
+  const password = $('#update-cfg-password').value;
+  
+  if (!owner || !repo) {
+    toast('DUEÑO Y REPOSITORIO REQUERIDOS', 'error');
+    return;
+  }
+  if (!password) {
+    toast('CONTRASEÑA REQUERIDA', 'error');
+    return;
+  }
+  
+  try {
+    await api('/updates/config', {
+      method: 'POST',
+      body: JSON.stringify({ github_owner: owner, github_repo: repo, password: password })
+    });
+    
+    toast('CONFIGURACIÓN GUARDADA', 'success');
+    closeUpdateConfigModal();
+    await loadUpdatesInfo();
+  } catch (e) {
+    toast('ERROR: ' + e.message, 'error');
+  }
+}
+
 
 async function saveConfig() {
   try {
@@ -3528,11 +3778,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   initHoldButton();
+
+  // Initialize theme toggle button
+  const themeToggle = $('#theme-toggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      if (newTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+      }
+    });
+  }
 });
 
 setInterval(() => { if (currentSection === 'pedidos') loadPedidos(); }, 30000);
-setInterval(updateWhatsAppUnreadBadge, 15000);
-setTimeout(updateWhatsAppUnreadBadge, 2000);
 
 // ═══ GASTOS & STOCK ══════════════════════════════════════════════════════════
 
@@ -3634,39 +3898,120 @@ function renderStock() {
     });
   }
 
-  container.innerHTML = displayData.map(s => {
-    const prod       = catalogoForStock.find(p => p.id === s.producto_id);
-    const isInactive = prod && prod.sin_stock;
+  // Group items by product ID if category stock separation is enabled
+  const grouped = {};
+  displayData.forEach(s => {
+    const prod = catalogoForStock.find(p => p.id === s.producto_id);
+    const separate = prod && isProductStockSeparated(s.producto_id);
+    if (separate) {
+      if (!grouped[s.producto_id]) {
+        grouped[s.producto_id] = {
+          isGrouped: true,
+          product: prod,
+          items: []
+        };
+      }
+      grouped[s.producto_id].items.push(s);
+    } else {
+      const uniqueKey = 'single_' + s.id;
+      grouped[uniqueKey] = {
+        isGrouped: false,
+        product: prod,
+        item: s
+      };
+    }
+  });
 
-    const pct        = s.cantidad_inicial > 0 ? s.cantidad_actual / s.cantidad_inicial : 0;
-    const pctDisplay = Math.max(0, Math.min(100, Math.round(pct * 100)));
-    const barColor   = isInactive ? 'var(--text-light)' : (pct > 0.66 ? 'var(--success)' : pct > 0.33 ? '#f39c12' : pct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
-    const estadoTag  = isInactive
-      ? `<span class="pc-estado" style="color:var(--text-light); border-color:var(--text-light); background:rgba(0,0,0,0.04);">INACTIVO</span>`
-      : (s.cantidad_actual === 0
-          ? `<span class="pc-estado" style="color:var(--accent-red); border-color:var(--accent-red); background:rgba(231,76,60,0.06);">AGOTADO</span>`
-          : `<span class="pc-estado" style="color:${barColor}; border-color:${barColor}; background:transparent; font-family:var(--font-mono);">${pctDisplay}%</span>`);
-    return `
-      <div class="stock-card" style="border-left-color:${barColor}; ${isInactive ? 'opacity:0.65;' : ''}">
-        <div class="pc-top">
-          <span class="pc-cliente" style="${isInactive ? 'color:var(--text-light);' : ''}">${s.nombre}</span>
-          ${estadoTag}
-        </div>
-        <div style="margin:6px 0 8px;">
-          <div style="height:8px; background:var(--bg-off-white); border:1px solid var(--bg-cool-gray); border-radius:6px; overflow:hidden;">
-            <div style="height:100%; width:${pctDisplay}%; background:${barColor}; border-radius:6px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1);"></div>
+  container.innerHTML = Object.values(grouped).map(g => {
+    if (g.isGrouped) {
+      const prod = g.product;
+      const isInactive = prod && prod.sin_stock;
+      
+      const totalInicial = g.items.reduce((sum, item) => sum + parseFloat(item.cantidad_inicial || 0), 0);
+      const totalActual = g.items.reduce((sum, item) => sum + parseFloat(item.cantidad_actual || 0), 0);
+      
+      const pct = totalInicial > 0 ? totalActual / totalInicial : 0;
+      const pctDisplay = Math.max(0, Math.min(100, Math.round(pct * 100)));
+      const barColor = isInactive ? 'var(--text-light)' : (pct > 0.66 ? 'var(--success)' : pct > 0.33 ? '#f39c12' : pct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
+      
+      const estadoTag = isInactive
+        ? `<span class="pc-estado" style="color:var(--text-light); border-color:var(--text-light); background:rgba(0,0,0,0.04);">INACTIVO</span>`
+        : (totalActual === 0
+            ? `<span class="pc-estado" style="color:var(--accent-red); border-color:var(--accent-red); background:rgba(231,76,60,0.06);">AGOTADO</span>`
+            : `<span class="pc-estado" style="color:${barColor}; border-color:${barColor}; background:transparent; font-family:var(--font-mono);">${pctDisplay}%</span>`);
+            
+      const itemsHtml = g.items.map(item => {
+        const itemPct = item.cantidad_inicial > 0 ? item.cantidad_actual / item.cantidad_inicial : 0;
+        const itemPctDisplay = Math.max(0, Math.min(100, Math.round(itemPct * 100)));
+        const itemBarColor = isInactive ? 'var(--text-light)' : (itemPct > 0.66 ? 'var(--success)' : itemPct > 0.33 ? '#f39c12' : itemPct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
+        
+        return `
+          <div style="margin-top: 10px; border-top: 1px dashed var(--bg-cool-gray); padding-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span class="variant-pill" style="display: inline-block; font-size: 0.72rem; padding: 2px 6px; cursor: default; background: rgba(0,0,0,0.02); color: var(--text-light); border-color: var(--bg-cool-gray); pointer-events: none; border-radius: 4px; font-family: var(--font-mono);">${item.var_tipo || 'General'}</span>
+            </div>
+            <div style="margin: 4px 0 6px;">
+              <div style="height: 8px; background: var(--bg-off-white); border: 1px solid var(--bg-cool-gray); border-radius: 6px; overflow: hidden;">
+                <div style="height: 100%; width: ${itemPctDisplay}%; background: ${itemBarColor}; border-radius: 6px; transition: width 0.5s cubic-bezier(0.4,0,0.2,1);"></div>
+              </div>
+            </div>
+            <div class="pc-bottom" style="margin-top: 0; padding-top: 2px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-family: var(--font-head); font-weight: 700; font-size: 0.9rem; color: ${itemBarColor};">
+                ${formatStockValue(item.cantidad_actual)} / ${formatStockValue(item.cantidad_inicial)} ${item.unidad}
+              </span>
+              <div class="pc-actions">
+                <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${item.id})">✎ AJUSTAR</button>
+                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteStockItem(${item.id})">✕</button>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="pc-bottom">
-          <span style="font-family:var(--font-head); font-weight:700; font-size:1rem; color:${barColor};">
-            ${s.cantidad_actual} / ${s.cantidad_inicial} ${s.unidad}
-          </span>
-          <div class="pc-actions">
-            <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${s.id})">✎ AJUSTAR</button>
-            <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteStockItem(${s.id})">✕</button>
+        `;
+      }).join('');
+
+      return `
+        <div class="stock-card" style="${isInactive ? 'opacity:0.65;' : ''}">
+          <div class="pc-top" style="margin-bottom: 4px;">
+            <span class="pc-cliente" style="${isInactive ? 'color:var(--text-light);' : ''}">${prod ? prod.nombre : ''} <span style="font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-light); font-weight: normal; margin-left: 6px;">[${formatStockValue(totalActual)}/${formatStockValue(totalInicial)}]</span></span>
+            ${estadoTag}
           </div>
+          ${itemsHtml}
         </div>
-      </div>`;
+      `;
+    } else {
+      const s = g.item;
+      const prod = g.product;
+      const isInactive = prod && prod.sin_stock;
+
+      const pct = s.cantidad_inicial > 0 ? s.cantidad_actual / s.cantidad_inicial : 0;
+      const pctDisplay = Math.max(0, Math.min(100, Math.round(pct * 100)));
+      const barColor = isInactive ? 'var(--text-light)' : (pct > 0.66 ? 'var(--success)' : pct > 0.33 ? '#f39c12' : pct > 0 ? 'var(--accent-red)' : 'var(--text-light)');
+      const estadoTag = isInactive
+        ? `<span class="pc-estado" style="color:var(--text-light); border-color:var(--text-light); background:rgba(0,0,0,0.04);">INACTIVO</span>`
+        : (s.cantidad_actual === 0
+            ? `<span class="pc-estado" style="color:var(--accent-red); border-color:var(--accent-red); background:rgba(231,76,60,0.06);">AGOTADO</span>`
+            : `<span class="pc-estado" style="color:${barColor}; border-color:${barColor}; background:transparent; font-family:var(--font-mono);">${pctDisplay}%</span>`);
+      return `
+        <div class="stock-card" style="${isInactive ? 'opacity:0.65;' : ''}">
+          <div class="pc-top">
+            <span class="pc-cliente" style="${isInactive ? 'color:var(--text-light);' : ''}">${s.nombre}</span>
+            ${estadoTag}
+          </div>
+          <div style="margin:6px 0 8px;">
+            <div style="height:8px; background:var(--bg-off-white); border:1px solid var(--bg-cool-gray); border-radius:6px; overflow:hidden;">
+              <div style="height:100%; width:${pctDisplay}%; background:${barColor}; border-radius:6px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1);"></div>
+            </div>
+          </div>
+          <div class="pc-bottom">
+            <span style="font-family:var(--font-head); font-weight:700; font-size:1rem; color:${barColor};">
+              ${formatStockValue(s.cantidad_actual)} / ${formatStockValue(s.cantidad_inicial)} ${s.unidad}
+            </span>
+            <div class="pc-actions">
+              <button class="btn btn-sm btn-ghost" onclick="openStockAjuste(${s.id})">✎ AJUSTAR</button>
+              <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteStockItem(${s.id})">✕</button>
+            </div>
+          </div>
+        </div>`;
+    }
   }).join('');
 }
 
@@ -3691,6 +4036,9 @@ async function openStockModal(sid = null) {
         .join('');
   }
 
+  const qtyGroup = $('#stock-cantidad-group');
+  if (qtyGroup) qtyGroup.style.display = 'block';
+
   if (sid) {
     const item = stockData.find(s => s.id === sid);
     if (!item) return;
@@ -3709,6 +4057,12 @@ async function openStockModal(sid = null) {
     $('#stock-producto-id').value = item.producto_id || '';
     $('#stock-cantidad').value = item.cantidad_inicial;
     $('#stock-unidad').value   = item.unidad || 'unidades';
+
+    // Hide cooking checkboxes when editing single stock entry
+    const coccionGroup = $('#stock-coccion-group');
+    const coccionContainer = $('#stock-coccion-checkboxes');
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
   } else {
     $('#stock-modal-title').textContent = '// CARGAR STOCK';
     $('#stock-submit-btn').textContent  = 'AGREGAR';
@@ -3720,6 +4074,12 @@ async function openStockModal(sid = null) {
     $('#stock-producto-id').value = '';
     $('#stock-cantidad').value = 1;
     $('#stock-unidad').value   = 'unidades';
+
+    // Hide cooking checkboxes on open
+    const coccionGroup = $('#stock-coccion-group');
+    const coccionContainer = $('#stock-coccion-checkboxes');
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
   }
   $('#modal-stock').classList.add('open');
   if (catSel) {
@@ -3727,6 +4087,73 @@ async function openStockModal(sid = null) {
   } else {
     setTimeout(() => $('#stock-producto-id').focus(), 80);
   }
+}
+
+function isProductFullyAdded(p) {
+  const existingEntries = stockData.filter(s => s.producto_id === p.id && (!editingStockId || s.id !== editingStockId));
+  if (existingEntries.length === 0) return false;
+  
+  if (isProductStockSeparated(p.id)) {
+    const list = (typeof stockTipos !== 'undefined' && stockTipos && stockTipos.length) ? stockTipos : ((typeof tiposData !== 'undefined') ? tiposData : []);
+    const tipo = list.find(t => t.id === p.tipo_id);
+    const options = tipo ? tipo.variantes_tipo || [] : [];
+    if (options.length === 0) return true;
+    
+    return options.every(opt => existingEntries.some(s => s.var_tipo === opt));
+  }
+  return true;
+}
+
+function onStockProductoChange() {
+  const prodId = parseInt($('#stock-producto-id').value, 10);
+  const prod = catalogoForStock.find(p => p.id === prodId);
+  const coccionGroup = $('#stock-coccion-group');
+  const coccionContainer = $('#stock-coccion-checkboxes');
+  const qtyGroup = $('#stock-cantidad-group');
+  
+  if (!prod || !isProductStockSeparated(prodId)) {
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
+    if (qtyGroup) qtyGroup.style.display = 'block';
+    return;
+  }
+  
+  const list = (typeof stockTipos !== 'undefined' && stockTipos && stockTipos.length) ? stockTipos : ((typeof tiposData !== 'undefined') ? tiposData : []);
+  const tipo = list.find(t => t.id === prod.tipo_id);
+  const options = tipo ? tipo.variantes_tipo || [] : [];
+  
+  if (options.length === 0) {
+    if (coccionGroup) coccionGroup.style.display = 'none';
+    if (coccionContainer) coccionContainer.innerHTML = '';
+    if (qtyGroup) qtyGroup.style.display = 'block';
+    return;
+  }
+  
+  if (qtyGroup) qtyGroup.style.display = 'none';
+  
+  const existingEntries = stockData.filter(s => s.producto_id === prodId && (!editingStockId || s.id !== editingStockId));
+  const existingVarTipos = existingEntries.map(s => s.var_tipo);
+  
+  if (coccionContainer) {
+    coccionContainer.innerHTML = options.map(opt => {
+      const isAlreadyInStock = existingVarTipos.includes(opt);
+      const checkedAttr = isAlreadyInStock ? '' : 'checked';
+      const disabledAttr = isAlreadyInStock ? 'disabled' : '';
+      const labelSuffix = isAlreadyInStock ? ' <span style="color:var(--text-light); font-size:0.75rem;">(Ya agregado)</span>' : '';
+      
+      return `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; ${isAlreadyInStock ? 'opacity:0.6;' : ''}">
+          <label class="sf-check" style="margin-bottom:0; flex:1; ${isAlreadyInStock ? 'pointer-events:none;' : ''}">
+            <input type="checkbox" name="stock-coccion-opt" value="${opt}" ${checkedAttr} ${disabledAttr} onchange="const qtyInput = this.closest('div').querySelector('.stock-coccion-qty'); if (qtyInput) qtyInput.disabled = !this.checked;">
+            <span class="box"></span>
+            <span style="font-size:0.85rem;">${opt}${labelSuffix}</span>
+          </label>
+          <input type="number" class="stock-coccion-qty" data-opt="${opt}" min="0" step="any" value="1" ${isAlreadyInStock ? 'disabled' : ''} style="width:85px; padding: 4px 8px; border: 1px solid var(--bg-cool-gray); border-radius: 4px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-dark); background: var(--bg-off-white);">
+        </div>
+      `;
+    }).join('');
+  }
+  if (coccionGroup) coccionGroup.style.display = 'block';
 }
 
 function onStockCategoriaChange() {
@@ -3752,9 +4179,9 @@ function filterStockProducts() {
   prodSel.innerHTML = '<option value="" disabled selected>Seleccionar</option>' +
     filteredProds
       .map(p => {
-        const isAlreadyAdded = stockData.some(s => s.producto_id === p.id && (!editingStockId || s.id !== editingStockId));
-        const disabledAttr = isAlreadyAdded ? 'disabled style="color:var(--text-light);"' : '';
-        const suffix = isAlreadyAdded ? ' (Ya agregado)' : '';
+        const isFullyAdded = isProductFullyAdded(p);
+        const disabledAttr = isFullyAdded ? 'disabled style="color:var(--text-light);"' : '';
+        const suffix = isFullyAdded ? ' (Ya agregado)' : '';
         return `<option value="${p.id}" ${disabledAttr}>${p.nombre}${suffix}</option>`;
       })
       .join('');
@@ -3764,31 +4191,71 @@ function closeStockModal() { $('#modal-stock').classList.remove('open'); }
 
 async function submitStock() {
   const producto_id = parseInt($('#stock-producto-id').value, 10) || null;
-  const cantidadRaw    = parseInt($('#stock-cantidad').value, 10);
-  const unidadRaw      = $('#stock-unidad').value;
-
   if (!producto_id) { toast('Seleccioná un producto', 'error'); return; }
-  if (!cantidadRaw || cantidadRaw < 1) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
 
-  let cantidad = cantidadRaw;
-  let unidad = 'unidades';
-  if (unidadRaw === 'docenas') {
-    cantidad = cantidad * 12;
-  }
+  const prod = catalogoForStock.find(p => p.id === producto_id);
+  const isSeparated = isProductStockSeparated(producto_id);
 
-  try {
-    if (editingStockId) {
-      await api(`/stock/${editingStockId}`, { method: 'PUT',
-        body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad }) });
-      toast('STOCK ACTUALIZADO', 'success');
-    } else {
-      await api('/stock', { method: 'POST',
-        body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad }) });
-      toast('STOCK AGREGADO', 'success');
+  if (prod && isSeparated && !editingStockId) {
+    const checkedOpts = Array.from(document.querySelectorAll('input[name="stock-coccion-opt"]:checked'));
+    if (checkedOpts.length === 0) {
+      toast('Seleccioná al menos una opción de cocción', 'error');
+      return;
     }
-    closeStockModal();
-    await loadStock();
-  } catch(e) { toast('ERROR: ' + e.message, 'error'); }
+    
+    const payloads = [];
+    const unidadRaw = $('#stock-unidad').value;
+    const unidad = 'unidades';
+
+    for (const cb of checkedOpts) {
+      const opt = cb.value;
+      const qtyInput = cb.closest('div').querySelector('.stock-coccion-qty');
+      const qtyVal = parseFloat(qtyInput ? qtyInput.value : 0);
+      if (isNaN(qtyVal) || qtyVal <= 0) {
+        toast(`La cantidad para ${opt} debe ser mayor a 0`, 'error');
+        if (qtyInput) qtyInput.focus();
+        return;
+      }
+      let finalQty = qtyVal;
+      if (unidadRaw === 'docenas') {
+        finalQty = finalQty * 12;
+      }
+      payloads.push({ producto_id, cantidad_inicial: finalQty, unidad, var_tipo: opt });
+    }
+
+    try {
+      for (const payload of payloads) {
+        await api('/stock', { method: 'POST', body: JSON.stringify(payload) });
+      }
+      toast('STOCK AGREGADO', 'success');
+      closeStockModal();
+      await loadStock();
+    } catch(e) { toast('ERROR: ' + e.message, 'error'); }
+  } else {
+    const cantidadRaw    = parseFloat($('#stock-cantidad').value);
+    const unidadRaw      = $('#stock-unidad').value;
+    if (isNaN(cantidadRaw) || cantidadRaw <= 0) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
+
+    let cantidad = cantidadRaw;
+    let unidad = 'unidades';
+    if (unidadRaw === 'docenas') {
+      cantidad = cantidad * 12;
+    }
+
+    try {
+      if (editingStockId) {
+        await api(`/stock/${editingStockId}`, { method: 'PUT',
+          body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad }) });
+        toast('STOCK ACTUALIZADO', 'success');
+      } else {
+        await api('/stock', { method: 'POST',
+          body: JSON.stringify({ producto_id, cantidad_inicial: cantidad, unidad, var_tipo: "" }) });
+        toast('STOCK AGREGADO', 'success');
+      }
+      closeStockModal();
+      await loadStock();
+    } catch(e) { toast('ERROR: ' + e.message, 'error'); }
+  }
 }
 
 // Ajuste manual de cantidad actual
@@ -3797,7 +4264,7 @@ function openStockAjuste(sid) {
   const item = stockData.find(s => s.id === sid);
   if (!item) return;
   $('#ajuste-item-nombre').textContent =
-    `${item.nombre} — quedan: ${item.cantidad_actual} de ${item.cantidad_inicial} ${item.unidad}`;
+    `${item.nombre} — quedan: ${formatStockValue(item.cantidad_actual)} de ${formatStockValue(item.cantidad_inicial)} ${item.unidad}`;
   $('#ajuste-operacion').value = 'agregar';
   $('#ajuste-cantidad').value = ''; // Blank by default for immediate typing
   $('#modal-stock-ajuste').classList.add('open');
@@ -3808,7 +4275,7 @@ function closeStockAjuste() { $('#modal-stock-ajuste').classList.remove('open');
 
 async function submitAjuste() {
   const op = $('#ajuste-operacion').value;
-  const qty = parseInt($('#ajuste-cantidad').value, 10);
+  const qty = parseFloat($('#ajuste-cantidad').value);
   if (isNaN(qty) || qty < 0) { toast('Cantidad inválida', 'error'); return; }
   const item = stockData.find(s => s.id === ajusteStockId);
   if (!item) return;
@@ -4166,744 +4633,7 @@ async function deleteGasto(gid) {
 }
 
 
-// ── WHATSAPP INTEGRATION ─────────────────────────────────────────────────────
-
-let waActiveJid = null;
-let waChatsList = [];
-let waStatusInterval = null;
-let waMessagesInterval = null;
-let isLoadingMessages = false;
-let lastActiveChatMsgCount = 0;
-let lastActiveChatMsgId = '';
-
-function clearWhatsAppIntervals() {
-  if (waStatusInterval) {
-    clearInterval(waStatusInterval);
-    waStatusInterval = null;
-  }
-  if (waMessagesInterval) {
-    clearInterval(waMessagesInterval);
-    waMessagesInterval = null;
-  }
-}
-
-async function initWhatsAppSection() {
-  clearWhatsAppIntervals();
-  
-  const configured = await checkWhatsAppStatus();
-  if (!configured) return; // No polling if not configured
-  
-  // Status check every 15 seconds only when configured
-  waStatusInterval = setInterval(async () => {
-    if (currentSection === 'whatsapp') {
-      const statusRes = await api('/whatsapp/status').catch(() => null);
-      if (statusRes && statusRes.connected) {
-        loadWhatsAppChats();
-      } else if (statusRes && !statusRes.connected) {
-        // Still disconnected, show QR refresh
-      }
-    }
-  }, 15000);
-}
-
-async function saveWhatsAppConfig() {
-  const url = $('#wa-setup-url') ? $('#wa-setup-url').value.trim() : '';
-  const token = $('#wa-setup-token') ? $('#wa-setup-token').value.trim() : '';
-  const instance = ($('#wa-setup-instance') && $('#wa-setup-instance').value.trim()) 
-    ? $('#wa-setup-instance').value.trim() 
-    : 'laextra';
-  
-  if (!url || !token) {
-    toast('COMPLETÁ URL Y TOKEN', 'error');
-    return;
-  }
-  
-  try {
-    await api('/config', { method: 'PUT', body: JSON.stringify({
-      whatsapp_url: url,
-      whatsapp_token: token,
-      whatsapp_instance: instance
-    }) });
-    toast('CONFIGURACIÓN GUARDADA', 'success');
-    await checkWhatsAppStatus();
-    const configured = await checkWhatsAppStatus();
-    if (configured) {
-      const waStatusInterval2 = setInterval(async () => {
-        if (currentSection === 'whatsapp') {
-          const statusRes = await api('/whatsapp/status').catch(() => null);
-          if (statusRes && statusRes.connected) {
-            loadWhatsAppChats();
-          }
-        }
-      }, 15000);
-    }
-  } catch (e) {
-    toast('ERROR AL GUARDAR: ' + e.message, 'error');
-  }
-}
-
-function resetWhatsAppConfig() {
-  const waUnconfigured = $('#wa-unconfigured');
-  const waDisconnected = $('#wa-disconnected');
-  const waChatLayout = $('#wa-chat-layout');
-  
-  if (waDisconnected) waDisconnected.style.display = 'none';
-  if (waChatLayout) waChatLayout.style.display = 'none';
-  if (waUnconfigured) waUnconfigured.style.display = 'block';
-  
-  clearWhatsAppIntervals();
-}
-
-async function checkWhatsAppStatus() {
-  const waUnconfigured = $('#wa-unconfigured');
-  const waLoading = $('#wa-loading');
-  const waDisconnected = $('#wa-disconnected');
-  const waChatLayout = $('#wa-chat-layout');
-  
-  if (!waUnconfigured || !waLoading) return false; // Section not visible
-  
-  waUnconfigured.style.display = 'none';
-  waLoading.style.display = 'block';
-  waDisconnected.style.display = 'none';
-  waChatLayout.style.display = 'none';
-  
-  try {
-    const res = await api('/whatsapp/status');
-    waLoading.style.display = 'none';
-    
-    if (res.connected) {
-      waChatLayout.style.display = 'flex';
-      await loadWhatsAppChats();
-    } else {
-      waDisconnected.style.display = 'block';
-      const qrContainer = $('#wa-qr-container');
-      if (res.qr) {
-        if (res.qr.startsWith('data:image')) {
-          qrContainer.innerHTML = `<img src="${res.qr}" style="width:220px; height:220px; display:block; image-rendering:pixelated;">`;
-        } else {
-          qrContainer.innerHTML = `
-            <div style="padding:15px; font-family:var(--font-mono); font-size:0.75rem; word-break:break-all; color:var(--text-dark);">
-              ${res.qr}
-            </div>`;
-        }
-      } else {
-        qrContainer.innerHTML = `
-          <div style="width:200px; height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.8rem;">
-            No hay código QR disponible
-          </div>`;
-      }
-    }
-    return true; // Configured and responded
-  } catch (e) {
-    waLoading.style.display = 'none';
-    const isUnconfigured = e.message === 'no_configurado'
-      || e.message.toLowerCase().includes('no configurado')
-      || e.message.toLowerCase().includes('configurado');
-    if (isUnconfigured) {
-      waUnconfigured.style.display = 'block';
-      // Pre-fill form with any saved values
-      api('/config').then(cfg => {
-        if (cfg && $('#wa-setup-url')) {
-          if (cfg.whatsapp_url) $('#wa-setup-url').value = cfg.whatsapp_url;
-          if (cfg.whatsapp_token) $('#wa-setup-token').value = cfg.whatsapp_token;
-          if (cfg.whatsapp_instance) $('#wa-setup-instance').value = cfg.whatsapp_instance;
-        }
-      }).catch(() => {});
-      return false; // Not configured
-    } else {
-      toast('ERROR WHATSAPP: ' + e.message, 'error');
-      waUnconfigured.style.display = 'block';
-      return false;
-    }
-  }
-}
-
-async function loadWhatsAppChats() {
-  try {
-    const data = await api('/whatsapp/chats');
-    waChatsList = Array.isArray(data) ? data : (data.chats || []);
-    renderChatsList(waChatsList);
-    updateWhatsAppUnreadBadge();
-  } catch (e) {
-    console.error("Error loading chats:", e);
-    $('#wa-chats-list').innerHTML = `
-      <div style="padding: 20px; text-align: center; color: var(--accent-red); font-family: var(--font-body); font-size: 0.8rem;">
-        Error al cargar chats: ${e.message}
-      </div>
-    `;
-  }
-}
-
-function renderChatsList(chats) {
-  const listEl = $('#wa-chats-list');
-  const filteredChats = chats.filter(c => {
-    const deletedTime = parseInt(localStorage.getItem('wa-deleted-' + c.id) || '0');
-    if (deletedTime > 0 && c.unreadCount === 0) {
-      const getTs = (chat) => {
-        const lm = chat.lastMessage;
-        if (lm && lm.messageTimestamp) {
-          return Number(lm.messageTimestamp.low || lm.messageTimestamp || 0);
-        }
-        return 0;
-      };
-      if (getTs(c) <= deletedTime) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  if (!filteredChats || filteredChats.length === 0) {
-    listEl.innerHTML = `
-      <div style="padding: 20px; text-align: center; color: var(--text-muted); font-family: var(--font-body); font-size: 0.85rem;">
-        No se encontraron chats
-      </div>
-    `;
-    return;
-  }
-
-  let html = '';
-  filteredChats.forEach(c => {
-    const isThisActive = (waActiveJid === c.id);
-    const activeClass = isThisActive ? 'active' : '';
-    const name = c.name || c.id.split('@')[0];
-    const unread = (c.unreadCount > 0 && !isThisActive) ? `<span class="wa-chat-unread">${c.unreadCount}</span>` : '';
-    const lastMsg = getWhatsAppLastMessage(c);
-    const time = formatWhatsAppTime(c.lastMessage?.messageTimestamp);
-    html += `
-      <div class="wa-chat-item ${activeClass}" onclick="selectWhatsAppChat('${c.id}', '${name.replace(/'/g, "\\'")}', '${c.phoneNumber}')">
-        <div class="wa-chat-item-header">
-          <span class="wa-chat-name">${name}</span>
-          <span class="wa-chat-time">${time}</span>
-        </div>
-        <div class="wa-chat-item-body">
-          <span class="wa-chat-last-msg">${lastMsg}</span>
-          ${unread}
-        </div>
-      </div>
-    `;
-  });
-  listEl.innerHTML = html;
-}
-
-function filterChats() {
-  const q = $('#wa-chat-search').value.toLowerCase().trim();
-  const filtered = waChatsList.filter(c => {
-    const name = (c.name || '').toLowerCase();
-    const jid = (c.id || '').toLowerCase();
-    return name.includes(q) || jid.includes(q);
-  });
-  renderChatsList(filtered);
-}
-
-function selectWhatsAppChat(jid, name, phoneNumber) {
-  waActiveJid = jid;
-  lastActiveChatMsgCount = 0;
-  lastActiveChatMsgId = '';
-  
-  // Highlight active chat card
-  $$('.wa-chat-item').forEach(item => {
-    const onclickVal = item.getAttribute('onclick') || '';
-    item.classList.toggle('active', onclickVal.includes(jid));
-  });
-  
-  $('#wa-active-chat-name').textContent = name;
-  $('#wa-active-chat-phone').textContent = phoneNumber || jid.split('@')[0];
-  $('#wa-delete-chat-btn').style.display = 'block';
-  $('#wa-message-input-bar').style.display = 'flex';
-  if ($('#wa-rename-btn')) $('#wa-rename-btn').style.display = 'inline-block';
-  if ($('#wa-popup-btn')) $('#wa-popup-btn').style.display = 'inline-block';
-  
-  // Clear unread locally and update badge
-  const chatObj = waChatsList.find(c => c.id === jid);
-  if (chatObj) {
-    chatObj.unreadCount = 0;
-  }
-  renderChatsList(waChatsList);
-  updateWhatsAppUnreadBadge();
-  
-  const historyEl = $('#wa-messages-history');
-  historyEl.innerHTML = `
-    <div style="flex:1; display:flex; align-items:center; justify-content:center;">
-      <div class="loading" style="font-size:0.9rem; font-family:var(--font-header);">CARGANDO MENSAJES...</div>
-    </div>
-  `;
-  
-  loadActiveChatMessages();
-  
-  if (waMessagesInterval) clearInterval(waMessagesInterval);
-  waMessagesInterval = setInterval(() => {
-    if (currentSection === 'whatsapp' && waActiveJid === jid) {
-      loadActiveChatMessages();
-    }
-  }, 3000);
-}
-
-async function loadActiveChatMessages() {
-  if (!waActiveJid || isLoadingMessages) return;
-  isLoadingMessages = true;
-  try {
-    const data = await api(`/whatsapp/messages?jid=${encodeURIComponent(waActiveJid)}`);
-    const messages = Array.isArray(data) ? data : (data.messages || []);
-    
-    // Sort chronological
-    messages.sort((a, b) => {
-      const tsA = a.messageTimestamp || 0;
-      const tsB = b.messageTimestamp || 0;
-      return tsA - tsB;
-    });
-
-    // Avoid DOM redraw if message count and last message ID are identical (preserves playing audio)
-    const lastMsg = messages[messages.length - 1];
-    const lastId = lastMsg ? lastMsg.key.id : '';
-    if (messages.length === lastActiveChatMsgCount && lastId === lastActiveChatMsgId) {
-      isLoadingMessages = false;
-      return;
-    }
-    lastActiveChatMsgCount = messages.length;
-    lastActiveChatMsgId = lastId;
-    
-    const historyEl = $('#wa-messages-history');
-    
-    // Auto-scroll logic (scroll to bottom if user is close to bottom)
-    const shouldScroll = historyEl.scrollHeight - historyEl.scrollTop <= historyEl.clientHeight + 80;
-    
-    const deletedTime = parseInt(localStorage.getItem('wa-deleted-' + waActiveJid) || '0');
-    let html = '';
-    messages.forEach(msg => {
-      const msgTime = Number(msg.messageTimestamp || 0);
-      if (deletedTime === 0 || msgTime > deletedTime) {
-        html += renderWhatsAppMessage(msg);
-      }
-    });
-    
-    if (!html) {
-      html = `
-        <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.85rem;">
-          No hay mensajes en esta conversación
-        </div>
-      `;
-    }
-    
-    historyEl.innerHTML = html;
-    
-    if (shouldScroll) {
-      historyEl.scrollTop = historyEl.scrollHeight;
-    }
-  } catch (e) {
-    console.error("Error loading messages:", e);
-  } finally {
-    isLoadingMessages = false;
-  }
-}
-
-async function sendWhatsAppMessage() {
-  const inputEl = $('#wa-message-input');
-  const text = inputEl.value.trim();
-  if (!text || !waActiveJid) return;
-  
-  inputEl.value = '';
-  
-  // Optimistic UI update
-  const historyEl = $('#wa-messages-history');
-  const tempMsg = {
-    key: { fromMe: true },
-    message: { conversation: text },
-    messageTimestamp: Math.floor(Date.now() / 1000)
-  };
-  
-  if (historyEl.querySelector('.loading') || historyEl.textContent.includes('No hay mensajes')) {
-    historyEl.innerHTML = '';
-  }
-  
-  historyEl.innerHTML += renderWhatsAppMessage(tempMsg);
-  historyEl.scrollTop = historyEl.scrollHeight;
-  
-  try {
-    await api('/whatsapp/send', {
-      method: 'POST',
-      body: JSON.stringify({ number: waActiveJid, text: text })
-    });
-    loadActiveChatMessages();
-  } catch (e) {
-    toast('ERROR AL ENVIAR: ' + e.message, 'error');
-  }
-}
-
-function getWhatsAppLastMessage(chat) {
-  if (!chat) return '';
-  const lm = chat.lastMessage;
-  if (!lm) return '';
-  if (typeof lm === 'string') return lm;
-  if (typeof lm === 'object') {
-    const msg = lm.message;
-    if (msg) {
-      if (msg.conversation) return msg.conversation;
-      if (msg.extendedTextMessage) return msg.extendedTextMessage.text;
-      if (msg.imageMessage) return '📷 Imagen';
-      if (msg.videoMessage) return '🎥 Video';
-      if (msg.audioMessage) return '🎵 Audio';
-      if (msg.documentMessage) return '📄 Documento';
-    }
-  }
-  return '';
-}
-
-function formatWhatsAppTime(ts) {
-  if (!ts) return '';
-  let date;
-  if (ts < 10000000000) {
-    date = new Date(ts * 1000);
-  } else {
-    date = new Date(ts);
-  }
-  const h = String(date.getHours()).padStart(2, '0');
-  const m = String(date.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function renderWhatsAppMessage(msg) {
-  let htmlContent = '';
-  const fromMe = msg.key ? msg.key.fromMe : false;
-  const bubbleClass = fromMe ? 'wa-message-outgoing' : 'wa-message-incoming';
-  const jid = msg.key?.remoteJid || '';
-  const msgId = msg.key?.id || '';
-
-  if (msg.message) {
-    if (msg.message.conversation) {
-      const escText = msg.message.conversation.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      htmlContent = `<div class="wa-message-content" style="white-space: pre-wrap;">${escText}</div>`;
-    } else if (msg.message.extendedTextMessage) {
-      const escText = msg.message.extendedTextMessage.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      htmlContent = `<div class="wa-message-content" style="white-space: pre-wrap;">${escText}</div>`;
-    } else if (msg.message.imageMessage) {
-      const caption = msg.message.imageMessage.caption || '';
-      const escCaption = caption ? `<div style="margin-top:5px; font-size:0.8rem; white-space:pre-wrap;">${caption.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>` : '';
-      htmlContent = `
-        <div class="wa-message-media-img" style="margin-bottom: 2px;">
-          <img src="/static/whatsapp_media/${msgId}.jpg" 
-               onerror="lazyLoadWhatsAppMedia('${jid}', '${msgId}', 'image', this)" 
-               alt="Cargando imagen..." 
-               style="max-width: 280px; max-height: 280px; border-radius: 6px; display: block;" />
-        </div>
-        ${escCaption}
-      `;
-    } else if (msg.message.audioMessage) {
-      htmlContent = `
-        <div class="wa-message-media-audio" style="margin-bottom: 2px; display:flex; align-items:center; gap:8px;">
-          <audio controls src="/static/whatsapp_media/${msgId}.ogg" 
-                 onerror="lazyLoadWhatsAppMedia('${jid}', '${msgId}', 'audio', this)" 
-                 style="max-width: 240px; height: 32px;">
-          </audio>
-        </div>
-      `;
-    } else if (msg.message.videoMessage) {
-      htmlContent = `<div class="wa-message-content" style="color:var(--text-muted); font-style:italic;">🎥 [Video no soportado]</div>`;
-    } else if (msg.message.documentMessage) {
-      htmlContent = `<div class="wa-message-content" style="color:var(--text-muted); font-style:italic;">📄 [Documento no soportado]</div>`;
-    }
-  } else if (msg.content) {
-    const escText = msg.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    htmlContent = `<div class="wa-message-content" style="white-space: pre-wrap;">${escText}</div>`;
-  }
-
-  if (!htmlContent) return '';
-
-  const time = formatWhatsAppTime(msg.messageTimestamp);
-  return `
-    <div class="wa-message-bubble ${bubbleClass}" style="max-width: 75%;">
-      ${htmlContent}
-      <span class="wa-message-time" style="display:block; text-align:right;">${time}</span>
-    </div>
-  `;
-}
-
-function closeRenameModal() {
-  $('#modal-rename').classList.remove('open');
-}
-
-function promptRenameContact() {
-  if (!waActiveJid) return;
-  const currentName = $('#wa-active-chat-name').textContent;
-  const inputEl = $('#rename-contact-input');
-  if (inputEl) {
-    inputEl.value = currentName;
-  }
-  $('#modal-rename').classList.add('open');
-  setTimeout(() => inputEl.focus(), 100);
-}
-
-async function submitRenameContact() {
-  if (!waActiveJid) return;
-  const newName = $('#rename-contact-input').value.trim();
-  closeRenameModal();
-  
-  try {
-    const res = await api('/whatsapp/rename', {
-      method: 'POST',
-      body: JSON.stringify({ jid: waActiveJid, name: newName })
-    });
-    
-    if (res.success) {
-      toast("CONTACTO RENOMBRADO", "success");
-      const displayName = newName || waActiveJid.split('@')[0];
-      $('#wa-active-chat-name').textContent = displayName;
-      loadWhatsAppChats();
-    } else {
-      toast("ERROR AL RENOMBRAR", "error");
-    }
-  } catch (e) {
-    toast("ERROR AL RENOMBRAR: " + e.message, "error");
-  }
-}
-
-let lastKnownUnreadCount = 0;
-
-async function updateWhatsAppUnreadBadge() {
-  try {
-    const data = await api('/whatsapp/chats');
-    const chats = Array.isArray(data) ? data : (data.chats || []);
-    
-    let totalUnread = 0;
-    chats.forEach(c => {
-      if (currentSection !== 'whatsapp' || waActiveJid !== c.id) {
-        totalUnread += c.unreadCount || 0;
-      }
-    });
-    
-    if (totalUnread > lastKnownUnreadCount) {
-      SFX.play('msg-notification');
-    }
-    lastKnownUnreadCount = totalUnread;
-    
-    const badge = $('#wa-unread-badge');
-    if (badge) {
-      if (totalUnread > 0) {
-        badge.style.display = 'inline-block';
-        badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-        badge.style.width = 'auto';
-        badge.style.height = 'auto';
-        badge.style.padding = '2px 6px';
-        badge.style.borderRadius = '10px';
-        badge.style.fontSize = '0.7rem';
-        badge.style.color = '#fff';
-        badge.style.fontWeight = 'bold';
-        badge.style.lineHeight = '1';
-      } else {
-        badge.style.display = 'none';
-      }
-    }
-  } catch (e) {
-    const badge = $('#wa-unread-badge');
-    if (badge) badge.style.display = 'none';
-  }
-}
-
-async function markAllWhatsAppAsRead() {
-  const unreadChats = waChatsList.filter(c => c.unreadCount > 0);
-  if (unreadChats.length === 0) {
-    toast("NO HAY MENSAJES SIN LEER", "info");
-    return;
-  }
-  
-  toast("MARCANDO COMO LEÍDO...", "info");
-  
-  try {
-    for (const c of unreadChats) {
-      await api(`/whatsapp/messages?jid=${encodeURIComponent(c.id)}`);
-      c.unreadCount = 0;
-    }
-    
-    renderChatsList(waChatsList);
-    updateWhatsAppUnreadBadge();
-    toast("TODOS MARCADOS COMO LEÍDO", "success");
-  } catch (e) {
-    toast("ERROR AL MARCAR: " + e.message, "error");
-  }
-}
-
-function toggleMuteSystemSounds() {
-  const chk = $('#cfg-mute-system-sounds');
-  if (chk) {
-    localStorage.setItem('mute-system-sounds', chk.checked);
-  }
-}
-
-function deleteActiveChat() {
-  if (!waActiveJid) return;
-  showConfirm("Eliminar Chat", "¿Estás seguro de que deseas ocultar este chat? La conversación se borrará de esta vista hasta que llegue un nuevo mensaje.", () => {
-    const now = Math.floor(Date.now() / 1000);
-    localStorage.setItem('wa-deleted-' + waActiveJid, now);
-    
-    // Clear active chat view
-    waActiveJid = null;
-    $('#wa-active-chat-name').textContent = 'Selecciona un chat';
-    $('#wa-active-chat-phone').textContent = 'para comenzar a chatear';
-    $('#wa-delete-chat-btn').style.display = 'none';
-    $('#wa-message-input-bar').style.display = 'none';
-    $('#wa-rename-btn').style.display = 'none';
-    if ($('#wa-popup-btn')) $('#wa-popup-btn').style.display = 'none';
-    $('#wa-messages-history').innerHTML = `
-      <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-body); font-size:0.9rem;">
-        No hay chat seleccionado
-    </div>
-    `;
-    
-    loadWhatsAppChats();
-    toast("CHAT ELIMINADO", "success");
-  });
-}
-
-// ── CHAT POPUP / NOTA DE PEDIDO ──────────────────────────────────────────────
-let _chatPopupActive = false;
-let pinnedChatForOrder = null;
-
-function pinChatForNextOrder() {
-  if (!waActiveJid) return;
-  const name = $('#wa-active-chat-name').textContent;
-  const phone = $('#wa-active-chat-phone').textContent;
-  pinnedChatForOrder = {
-    jid: waActiveJid,
-    name: name,
-    phone: phone
-  };
-  toast("CHAT GUARDADO PARA PRÓXIMO PEDIDO", "success");
-}
-
-function openChatPopup(jid, name, phoneNumber) {
-  // Remove existing popup
-  const existing = $('#chat-popup-note');
-  if (existing) existing.remove();
-
-  const popup = document.createElement('div');
-  popup.id = 'chat-popup-note';
-  popup.innerHTML = `
-    <div id="chat-popup-note-inner">
-      <div id="chat-popup-note-header">
-        <div>
-          <span id="chat-popup-note-name">${name}</span>
-          <span id="chat-popup-note-phone">${phoneNumber || ''}</span>
-        </div>
-        <button onclick="closeChatPopup()" title="Cerrar">✕</button>
-      </div>
-      <div id="chat-popup-note-messages">Cargando...</div>
-    </div>
-  `;
-  document.body.appendChild(popup);
-  _chatPopupActive = true;
-
-  // Load messages
-  fetch(`/api/whatsapp/messages?jid=${encodeURIComponent(jid)}&limit=40`)
-    .then(r => r.json())
-    .then(data => {
-      let msgs = (data.messages || data || []);
-      
-      // Sort chronological (oldest first, newest last)
-      msgs.sort((a, b) => {
-        const tsA = a.messageTimestamp || 0;
-        const tsB = b.messageTimestamp || 0;
-        return tsA - tsB;
-      });
-
-      const msgsEl = $('#chat-popup-note-messages');
-      if (!msgsEl) return;
-      if (!msgs.length) { msgsEl.innerHTML = '<div class="cpn-empty">Sin mensajes.</div>'; return; }
-      msgsEl.innerHTML = msgs.map(m => {
-        const fromMe = m.key?.fromMe;
-        const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp)*1000).toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'}) : '';
-        const mId = m.key?.id || '';
-        const j = m.key?.remoteJid || '';
-
-        let contentHtml = '';
-        if (m.message) {
-          if (m.message.conversation) {
-            contentHtml = `<span class="cpn-text">${m.message.conversation.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
-          } else if (m.message.extendedTextMessage) {
-            contentHtml = `<span class="cpn-text">${m.message.extendedTextMessage.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
-          } else if (m.message.imageMessage) {
-            const cap = m.message.imageMessage.caption || '';
-            contentHtml = `
-              <img src="/static/whatsapp_media/${mId}.jpg" 
-                   onerror="lazyLoadWhatsAppMedia('${j}', '${mId}', 'image', this)" 
-                   style="max-width:100%; max-height:150px; border-radius:4px; margin-bottom:2px; display:block;" />
-              ${cap ? `<span class="cpn-text" style="font-size:0.72rem;display:block;">${cap.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>` : ''}
-            `;
-          } else if (m.message.audioMessage) {
-            contentHtml = `
-              <audio controls src="/static/whatsapp_media/${mId}.ogg" 
-                     onerror="lazyLoadWhatsAppMedia('${j}', '${mId}', 'audio', this)" 
-                     style="max-width:100%; height:28px; margin-bottom:2px;">
-              </audio>
-            `;
-          } else {
-            contentHtml = `<span class="cpn-text" style="font-style:italic; opacity:0.6;">(media no soportado)</span>`;
-          }
-        } else if (m.content) {
-          contentHtml = `<span class="cpn-text">${m.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
-        }
-        
-        if (!contentHtml) return '';
-        
-        return `<div class="cpn-msg ${fromMe ? 'cpn-out' : 'cpn-in'}">
-          ${contentHtml}
-          <span class="cpn-time">${ts}</span>
-        </div>`;
-      }).join('');
-      msgsEl.scrollTop = msgsEl.scrollHeight;
-    })
-    .catch(() => {
-      const msgsEl = $('#chat-popup-note-messages');
-      if (msgsEl) msgsEl.innerHTML = '<div class="cpn-empty">Error al cargar mensajes.</div>';
-    });
-}
-
-function closeChatPopup() {
-  const p = $('#chat-popup-note');
-  if (p) p.remove();
-  _chatPopupActive = false;
-  pinnedChatForOrder = null;
-}
-
-// ── LAZY LOAD WHATSAPP MEDIA ─────────────────────────────────────────────────
-function lazyLoadWhatsAppMedia(jid, msgId, type, element) {
-  element.onerror = null; // Prevent infinite loop
-  
-  // Show a loading text or disable controls
-  if (type === 'image') {
-    element.alt = "Descargando imagen...";
-  }
-
-  fetch(`/api/whatsapp/download_media?jid=${encodeURIComponent(jid)}&msgId=${encodeURIComponent(msgId)}&type=${type}`)
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        // Cache bust and set source
-        const ext = type === 'image' ? 'jpg' : 'ogg';
-        element.src = `/static/whatsapp_media/${msgId}.${ext}?t=${Date.now()}`;
-      } else {
-        if (type === 'image') element.alt = "No se pudo descargar la imagen";
-      }
-    })
-    .catch(() => {
-      if (type === 'image') element.alt = "Error al descargar";
-    });
-}
-
-// ── LIMPIAR MULTIMEDIA MANUAL ────────────────────────────────────────────────
-async function clearWhatsAppMedia() {
-  showConfirm("Limpiar Multimedia", "¿Estás seguro de que quieres eliminar todas las imágenes y audios locales de WhatsApp para liberar espacio?", async () => {
-    try {
-      const res = await api('/whatsapp/clear_media', { method: 'POST' });
-      if (res.success) {
-        toast("MULTIMEDIA LIMPIADA CON ÉXITO", "success");
-      } else {
-        toast("ERROR AL LIMPIAR: " + (res.error || "Desconocido"), "error");
-      }
-    } catch (e) {
-      toast("ERROR: " + e.message, "error");
-    }
-  });
-}
+// ── WHATSAPP INTEGRATION REMOVED ──
 
 // ── BORRAR DATOS MODAL & HOLD LOGIC ──────────────────────────────────────────
 let holdTimer = null;
@@ -4915,7 +4645,6 @@ function openBorrarDatosModal() {
   const modal = $('#modal-borrar-datos');
   if (modal) {
     modal.style.display = 'flex';
-    $('#del-media').checked = false;
     $('#del-catalogo').checked = false;
     $('#del-pedidos').checked = false;
     
@@ -4941,11 +4670,10 @@ function initHoldButton() {
   
   const startHold = (e) => {
     e.preventDefault();
-    const delMedia = $('#del-media').checked;
     const delCatalog = $('#del-catalogo').checked;
     const delPedidos = $('#del-pedidos').checked;
     
-    if (!delMedia && !delCatalog && !delPedidos) {
+    if (!delCatalog && !delPedidos) {
       toast('SELECCIONÁ AL MENOS UNA OPCIÓN', 'error');
       return;
     }
@@ -4991,7 +4719,6 @@ function initHoldButton() {
 }
 
 async function executeDataDeletion() {
-  const delMedia = $('#del-media').checked;
   const delCatalog = $('#del-catalogo').checked;
   const delPedidos = $('#del-pedidos').checked;
   
@@ -5002,7 +4729,6 @@ async function executeDataDeletion() {
     const res = await api('/borrar-datos', {
       method: 'POST',
       body: JSON.stringify({
-        clear_media: delMedia,
         clear_catalog: delCatalog,
         clear_orders: delPedidos
       })
@@ -5021,4 +4747,51 @@ async function executeDataDeletion() {
     toast('ERROR AL BORRAR: ' + e.message, 'error');
   }
 }
+
+// ── GLOBAL SHORTCUTS & MODAL FOCUS TRAP ──────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  // 1. Shift+Enter to submit order when order modal is open
+  if (e.key === 'Enter' && e.shiftKey) {
+    const modal = document.getElementById('modal-pedido');
+    if (modal && modal.classList.contains('open')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof variantStep !== 'undefined' && variantStep) return;
+      submitPedido();
+    }
+  }
+
+  // 2. Strict Tab focus trapping inside open modals
+  if (e.key === 'Tab') {
+    const openOverlay = Array.from(document.querySelectorAll('.modal-overlay')).find(el => {
+      return el.classList.contains('open') || window.getComputedStyle(el).display !== 'none';
+    });
+    if (openOverlay) {
+      const focusables = openOverlay.querySelectorAll('input, select, textarea, button, [tabindex="0"]');
+      const visibleFocusables = Array.from(focusables).filter(el => {
+        if (el.disabled || el.tabIndex === -1) return false;
+        return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+      });
+
+      if (visibleFocusables.length > 0) {
+        const first = visibleFocusables[0];
+        const last = visibleFocusables[visibleFocusables.length - 1];
+        const active = document.activeElement;
+
+        if (!openOverlay.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      } else {
+        e.preventDefault();
+      }
+    }
+  }
+});
 
